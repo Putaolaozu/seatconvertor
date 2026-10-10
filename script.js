@@ -72,7 +72,7 @@
     for (let r = 0; r < rows; r++) {
       const tr = document.createElement('tr');
       const rowHead = document.createElement('th');
-      const rowNum = studentView ? rows - r : r + 1;
+      const rowNum = studentView ? r + 1 : rows - r;
       rowHead.textContent = `第${rowNum}行`;
       tr.appendChild(rowHead);
       for (let c = 0; c < cols; c++) {
