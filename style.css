@@ -5,8 +5,8 @@
     --muted: #666963;
     --line: #e6e7e2;
     --line-strong: #d5d7d0;
-    --accent: #db6e2a;
-    --accent-hover: #ad5021;
+    --accent: #3c9b20;
+    --accent-hover: #2e6814;
     --accent-soft: #eaf1ec;
     --shadow: 0 6px 24px rgba(27, 32, 26, .06);
   }
@@ -24,6 +24,8 @@
   .page { max-width: 1280px; margin: 0 auto; padding: 36px 28px 56px; }
   
   h1 { font-size: 28px; letter-spacing: -.03em; margin: 0 0 16px; font-weight: 700; }
+
+  h2 { font-size: medium; color: #666963;margin-left: 10px ;}
 
   .toolbar { margin: 0 0 20px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
   .toolbar-left, .toolbar-right { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
