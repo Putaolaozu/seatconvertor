@@ -243,6 +243,82 @@
     pasteMatrix(startR, startC, matrix);
   }, true);
 
+  // 监听复制事件 (Ctrl + C)
+  document.addEventListener('copy', event => {
+    const active = document.activeElement?.closest?.('.seat');
+    
+    // 如果没有选中区域，且当前焦点不在座位内，或者在座位内选中了部分文字进行原生复制，则不干涉
+    if (!selectionRange && active && window.getSelection().toString() !== '') {
+      return; 
+    }
+
+    if (!selectionRange && !active) return;
+
+    event.preventDefault();
+    event.clipboardData.setData('text/plain', getSelectedTextContent());
+    showToast('已复制所选座位');
+  });
+
+  // 监听剪切事件 (Ctrl + X)
+  document.addEventListener('cut', event => {
+    const active = document.activeElement?.closest?.('.seat');
+    if (!selectionRange && active && window.getSelection().toString() !== '') {
+      return;
+    }
+
+    if (!selectionRange && !active) return;
+
+    event.preventDefault();
+    
+    // 1. 复制文本到剪贴板
+    const text = getSelectedTextContent();
+    event.clipboardData.setData('text/plain', text);
+
+    // 2. 清空所选区域的座位内容
+    if (selectionRange) {
+      const range = { ...selectionRange };
+      for (let rr = range.top; rr <= range.bottom; rr++) {
+        for (let cc = range.left; cc <= range.right; cc++) {
+          seats[rr][cc] = '';
+        }
+      }
+      selectionRange = null;
+      render();
+      focusCell(range.top, range.left);
+      showToast('已剪切所选座位');
+    } else if (active) {
+      const r = Number(active.dataset.r);
+      const c = Number(active.dataset.c);
+      seats[r][c] = '';
+      render();
+      focusCell(r, c);
+      showToast('已剪切该座位');
+    }
+  });
+
+  // 辅助函数：获取当前选区或当前聚焦格子的文本内容（行列矩阵格式）
+  function getSelectedTextContent() {
+    if (selectionRange) {
+      const rowsData = [];
+      for (let r = selectionRange.top; r <= selectionRange.bottom; r++) {
+        const rowData = [];
+        for (let c = selectionRange.left; c <= selectionRange.right; c++) {
+          rowData.push(seats[r]?.[c] ?? '');
+        }
+        rowsData.push(rowData.join('\t'));
+      }
+      return rowsData.join('\n');
+    } else {
+      const active = document.activeElement?.closest?.('.seat');
+      if (active) {
+        const r = Number(active.dataset.r);
+        const c = Number(active.dataset.c);
+        return seats[r]?.[c] ?? '';
+      }
+    }
+    return '';
+  }
+
   table.addEventListener('mousedown', event => {
     const editor = event.target.closest('.seat');
     if (!editor || event.button !== 0) return;
@@ -314,6 +390,102 @@
       showToast('表格已复制');
     } catch (_) {
       showToast('复制失败');
+    }
+  });
+
+// 自定义右键菜单逻辑
+  const customMenu = document.getElementById('customMenu');
+  const menuCopy = document.getElementById('menuCopy');
+  const menuCut = document.getElementById('menuCut');
+  const menuPaste = document.getElementById('menuPaste');
+
+  table.addEventListener('contextmenu', event => {
+    const editor = event.target.closest('.seat');
+    if (!editor) return;
+
+    event.preventDefault(); // 阻止浏览器默认右键菜单
+    
+    // 如果右键的点不在当前多选区域内，且没有点中已选中的格子，则重置选中单格
+    const r = Number(editor.dataset.r);
+    const c = Number(editor.dataset.c);
+    if (!isInSelection(r, c)) {
+      selectionRange = null;
+      paintSelection();
+      focusCell(r, c);
+    }
+
+    // 显示自定义菜单
+    customMenu.style.top = `${Math.min(event.clientY, window.innerHeight - 150)}px`;
+    customMenu.style.left = `${Math.min(event.clientX, window.innerWidth - 150)}px`;
+    customMenu.classList.add('show');
+  });
+
+  // 点击页面其他地方隐藏右键菜单
+  document.addEventListener('click', () => {
+    customMenu.classList.remove('show');
+  });
+
+  // 右键菜单项：复制
+  menuCopy.addEventListener('click', async () => {
+    customMenu.classList.remove('show');
+    const text = getSelectedTextContent();
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('已复制所选座位');
+    } catch (_) {
+      showToast('复制失败');
+    }
+  });
+
+  // 右键菜单项：剪切
+  menuCut.addEventListener('click', async () => {
+    customMenu.classList.remove('show');
+    const text = getSelectedTextContent();
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (_) {}
+
+    if (selectionRange) {
+      const range = { ...selectionRange };
+      for (let rr = range.top; rr <= range.bottom; rr++) {
+        for (let cc = range.left; cc <= range.right; cc++) {
+          seats[rr][cc] = '';
+        }
+      }
+      selectionRange = null;
+      render();
+      focusCell(range.top, range.left);
+      showToast('已剪切所选座位');
+    } else {
+      const active = document.activeElement?.closest?.('.seat');
+      if (active) {
+        const r = Number(active.dataset.r);
+        const c = Number(active.dataset.c);
+        seats[r][c] = '';
+        render();
+        focusCell(r, c);
+        showToast('已剪切该座位');
+      }
+    }
+  });
+
+  // 右键菜单项：粘贴
+  menuPaste.addEventListener('click', async () => {
+    customMenu.classList.remove('show');
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      const lines = text.replace(/\r\n?/g, '\n').split('\n');
+      if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+      const matrix = lines.map(line => line.split('\t').map(x => x.trim()));
+      
+      const active = document.activeElement?.closest?.('.seat');
+      const startR = selectionRange ? selectionRange.top : (active ? Number(active.dataset.r) : lastFocusedCell.r);
+      const startC = selectionRange ? selectionRange.left : (active ? Number(active.dataset.c) : lastFocusedCell.c);
+      
+      pasteMatrix(startR, startC, matrix);
+    } catch (err) {
+      showToast('粘贴失败，请使用 Ctrl+V');
     }
   });
 
