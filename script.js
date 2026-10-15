@@ -4,7 +4,10 @@
   let rows = 7;
   let cols = 8;
   let seats = Array.from({ length: rows }, () => Array(cols).fill(''));
+  let unassigned = [];
   let studentView = false;
+  let arrangeMode = false;
+  let arrangeDrag = null;
   let toastTimer;
   let pointerDown = null;
   let dragSelecting = false;
@@ -20,6 +23,11 @@
   const bottomStage = document.getElementById('bottomStage');
   const seatCount = document.getElementById('seatCount');
   const toast = document.getElementById('toast');
+  const arrangeBtn = document.getElementById('arrangeBtn');
+  const waitingPanel = document.getElementById('waitingPanel');
+  const waitingList = document.getElementById('waitingList');
+  const waitingCount = document.getElementById('waitingCount');
+  const waitingHint = document.getElementById('waitingHint');
 
   function showToast(message) {
     toast.textContent = message;
@@ -29,7 +37,7 @@
   }
 
   function saveState() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ rows, cols, seats, studentView })); }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ rows, cols, seats, studentView, unassigned })); }
     catch (_) { }
   }
 
@@ -43,6 +51,9 @@
         Array.from({ length: cols }, (_, c) => String(saved.seats?.[r]?.[c] ?? '').replace(/[\r\n]/g, ' ').trim())
       );
       studentView = Boolean(saved.studentView);
+      unassigned = Array.isArray(saved.unassigned)
+        ? saved.unassigned.map(name => String(name ?? '').replace(/[\r\n]/g, ' ').trim()).filter(Boolean)
+        : [];
     } catch (_) { }
   }
 
@@ -51,6 +62,10 @@
     colsInput.value = cols;
     viewTitle.textContent = studentView ? '学生视角' : '教师视角';
     rotateLabel.textContent = studentView ? '恢复视角' : '旋转 180°';
+    arrangeBtn.textContent = arrangeMode ? '完成调整' : '调整座位';
+    arrangeBtn.setAttribute('aria-pressed', String(arrangeMode));
+    arrangeBtn.classList.toggle('primary', arrangeMode);
+    document.body.classList.toggle('arranging-seats', arrangeMode);
     topStage.hidden = !studentView;
     bottomStage.hidden = studentView;
     seatCount.textContent = `${rows} 行 × ${cols} 列 · 共 ${rows * cols} 座位`;
@@ -79,18 +94,62 @@
         const td = document.createElement('td');
         const editor = document.createElement('div');
         editor.className = 'seat' + (seats[r][c] ? ' has-text' : '') + (isInSelection(r, c) ? ' range-selected' : '');
-        editor.contentEditable = 'true';
         editor.spellcheck = false;
         editor.dataset.r = String(r);
         editor.dataset.c = String(c);
-        editor.textContent = seats[r][c];
+        if (arrangeMode) {
+          editor.contentEditable = 'false';
+          const label = document.createElement('span');
+          label.className = 'seat-label';
+          label.textContent = seats[r][c];
+          editor.appendChild(label);
+          if (seats[r][c]) {
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'remove-seat';
+            removeButton.textContent = '×';
+            removeButton.title = '移至待分配区';
+            removeButton.setAttribute('aria-label', `将${seats[r][c]}移至待分配区`);
+            editor.appendChild(removeButton);
+          }
+        } else {
+          editor.contentEditable = 'true';
+          editor.textContent = seats[r][c];
+        }
         td.appendChild(editor);
         tr.appendChild(td);
       }
       tbody.appendChild(tr);
     }
     table.replaceChildren(thead, tbody);
+    renderWaitingArea();
     saveState();
+  }
+
+  function renderWaitingArea() {
+    waitingPanel.hidden = !arrangeMode && unassigned.length === 0;
+    waitingCount.textContent = `${unassigned.length} 人`;
+    waitingHint.textContent = arrangeMode
+      ? '拖动学生到其他座位可交换位置；拖到空座位可直接安排，也可点右上角 × 暂时移出。'
+      : '学生暂存在这里。点击“调整座位”后，可将学生拖回座位。';
+    waitingList.replaceChildren();
+
+    if (unassigned.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'waiting-empty';
+      empty.textContent = arrangeMode ? '把学生拖到这里暂时待分配' : '暂无待分配学生';
+      waitingList.appendChild(empty);
+      return;
+    }
+
+    unassigned.forEach((name, index) => {
+      const item = document.createElement('div');
+      item.className = 'waiting-item';
+      item.dataset.index = String(index);
+      item.textContent = name;
+      item.setAttribute('aria-label', arrangeMode ? `拖动学生${name}安排座位` : name);
+      waitingList.appendChild(item);
+    });
   }
 
   function isInSelection(r, c) {
@@ -175,6 +234,7 @@
   });
 
   table.addEventListener('input', event => {
+    if (arrangeMode) return;
     const editor = event.target.closest('.seat');
     if (!editor) return;
     const r = Number(editor.dataset.r), c = Number(editor.dataset.c);
@@ -189,6 +249,7 @@
   colsInput.addEventListener('change', () => resizeGrid(rows, colsInput.value));
 
   document.addEventListener('paste', event => {
+    if (arrangeMode) return;
     const active = document.activeElement?.closest?.('.seat');
     if (!active && !selectionRange) return;
     const clipboard = event.clipboardData;
@@ -245,6 +306,7 @@
 
   // 监听复制事件 (Ctrl + C)
   document.addEventListener('copy', event => {
+    if (arrangeMode) return;
     const active = document.activeElement?.closest?.('.seat');
     
     // 如果没有选中区域，且当前焦点不在座位内，或者在座位内选中了部分文字进行原生复制，则不干涉
@@ -261,6 +323,7 @@
 
   // 监听剪切事件 (Ctrl + X)
   document.addEventListener('cut', event => {
+    if (arrangeMode) return;
     const active = document.activeElement?.closest?.('.seat');
     if (!selectionRange && active && window.getSelection().toString() !== '') {
       return;
@@ -320,6 +383,7 @@
   }
 
   table.addEventListener('mousedown', event => {
+    if (arrangeMode) return;
     const editor = event.target.closest('.seat');
     if (!editor || event.button !== 0) return;
     pointerDown = { r: Number(editor.dataset.r), c: Number(editor.dataset.c), x: event.clientX, y: event.clientY };
@@ -328,6 +392,7 @@
   });
 
   document.addEventListener('mousemove', event => {
+    if (arrangeMode) return;
     if (!pointerDown || !(event.buttons & 1)) return;
     if (!dragSelecting && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 4) return;
     dragSelecting = true;
@@ -341,6 +406,7 @@
   });
 
   document.addEventListener('mouseup', () => {
+    if (arrangeMode) return;
     if (!pointerDown) return;
     document.body.classList.remove('dragging-seats');
     if (!dragSelecting) { selectionRange = null; paintSelection(); }
@@ -349,6 +415,7 @@
   });
 
   table.addEventListener('keydown', event => {
+    if (arrangeMode) return;
     const editor = event.target.closest('.seat');
     if (!editor) return;
     const r = Number(editor.dataset.r), c = Number(editor.dataset.c);
@@ -375,22 +442,162 @@
     }
   });
 
+  arrangeBtn.addEventListener('click', () => {
+    arrangeMode = !arrangeMode;
+    selectionRange = null;
+    pointerDown = null;
+    dragSelecting = false;
+    document.body.classList.remove('dragging-seats');
+    document.body.classList.remove('dragging-arrangement');
+    customMenu.classList.remove('show');
+    render();
+    showToast(arrangeMode
+      ? '已进入调整模式：拖动学生交换位置，点 × 可移至待分配区'
+      : '已完成座位调整');
+  });
+
+  // 叉号：将学生暂时放入待分配区
+  table.addEventListener('click', event => {
+    const removeButton = event.target.closest('.remove-seat');
+    if (!removeButton || !arrangeMode) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const editor = removeButton.closest('.seat');
+    if (!editor) return;
+    const r = Number(editor.dataset.r);
+    const c = Number(editor.dataset.c);
+    const name = seats[r]?.[c] ?? '';
+    if (!name) return;
+    seats[r][c] = '';
+    unassigned.push(name);
+    selectionRange = null;
+    render();
+    showToast(`${name} 已移至待分配区`);
+  });
+
+  function beginArrangeDrag(event, source, element) {
+    if (!arrangeMode || !element) return;
+    if (event.button !== undefined && event.button !== 0) return;
+    event.preventDefault();
+    arrangeDrag = {
+      source,
+      element,
+      startX: event.clientX,
+      startY: event.clientY,
+      started: false,
+      target: null
+    };
+  }
+
+  table.addEventListener('pointerdown', event => {
+    if (!arrangeMode || event.target.closest('.remove-seat')) return;
+    const editor = event.target.closest('.seat');
+    if (!editor || !table.contains(editor)) return;
+    const r = Number(editor.dataset.r);
+    const c = Number(editor.dataset.c);
+    if (!seats[r]?.[c]) return;
+    beginArrangeDrag(event, { type: 'seat', r, c }, editor);
+  });
+
+  waitingList.addEventListener('pointerdown', event => {
+    if (!arrangeMode) return;
+    const item = event.target.closest('.waiting-item');
+    if (!item || !waitingList.contains(item)) return;
+    beginArrangeDrag(event, { type: 'waiting', index: Number(item.dataset.index) }, item);
+  });
+
+  function clearArrangeDropTarget() {
+    table.querySelectorAll('.drop-target').forEach(element => element.classList.remove('drop-target'));
+    waitingPanel.classList.remove('drop-target');
+    if (arrangeDrag) arrangeDrag.target = null;
+  }
+
+  function cleanArrangeDrag() {
+    document.body.classList.remove('dragging-arrangement');
+    table.querySelectorAll('.dragging-seat, .drop-target').forEach(element => {
+      element.classList.remove('dragging-seat', 'drop-target');
+    });
+    waitingList.querySelectorAll('.dragging-seat').forEach(element => element.classList.remove('dragging-seat'));
+    waitingPanel.classList.remove('drop-target');
+  }
+
+  document.addEventListener('pointermove', event => {
+    if (!arrangeDrag || !arrangeMode) return;
+    if (!arrangeDrag.started && Math.hypot(event.clientX - arrangeDrag.startX, event.clientY - arrangeDrag.startY) < 6) return;
+    if (!arrangeDrag.started) {
+      arrangeDrag.started = true;
+      document.body.classList.add('dragging-arrangement');
+      arrangeDrag.element.classList.add('dragging-seat');
+    }
+    event.preventDefault();
+    clearArrangeDropTarget();
+    const underPointer = document.elementFromPoint(event.clientX, event.clientY);
+    const targetSeat = underPointer?.closest?.('.seat');
+    if (targetSeat && table.contains(targetSeat)) {
+      targetSeat.classList.add('drop-target');
+      arrangeDrag.target = {
+        type: 'seat',
+        r: Number(targetSeat.dataset.r),
+        c: Number(targetSeat.dataset.c)
+      };
+    } else if (arrangeDrag.source.type === 'seat' && underPointer && waitingPanel.contains(underPointer)) {
+      waitingPanel.classList.add('drop-target');
+      arrangeDrag.target = { type: 'waiting' };
+    }
+  }, { passive: false });
+
+  function finishArrangeDrag(commit) {
+    if (!arrangeDrag) return;
+    const drag = arrangeDrag;
+    arrangeDrag = null;
+    cleanArrangeDrag();
+    if (commit && drag.started && drag.target) performArrangeDrop(drag.source, drag.target);
+  }
+
+  document.addEventListener('pointerup', () => finishArrangeDrag(true));
+  document.addEventListener('pointercancel', () => finishArrangeDrag(false));
+
+  function performArrangeDrop(source, target) {
+    selectionRange = null;
+    if (source.type === 'seat') {
+      const sourceName = seats[source.r]?.[source.c] ?? '';
+      if (!sourceName) return;
+      if (target.type === 'waiting') {
+        seats[source.r][source.c] = '';
+        unassigned.push(sourceName);
+        render();
+        showToast(`${sourceName} 已移至待分配区`);
+        return;
+      }
+      if (target.type === 'seat') {
+        if (source.r === target.r && source.c === target.c) return;
+        const targetName = seats[target.r]?.[target.c] ?? '';
+        seats[source.r][source.c] = targetName;
+        seats[target.r][target.c] = sourceName;
+        render();
+        showToast(targetName ? '已交换两名学生的座位' : '已移动到空座位');
+        return;
+      }
+    }
+
+    if (source.type === 'waiting' && target.type === 'seat') {
+      const sourceName = unassigned[source.index];
+      if (sourceName === undefined) return;
+      const displacedName = seats[target.r]?.[target.c] ?? '';
+      seats[target.r][target.c] = sourceName;
+      unassigned.splice(source.index, 1);
+      if (displacedName) unassigned.push(displacedName);
+      render();
+      showToast(displacedName ? '已安排学生，原座位学生移至待分配区' : '已安排学生到座位');
+    }
+  }
+
   document.getElementById('rotateBtn').addEventListener('click', () => {
     seats.reverse();
     seats.forEach(row => row.reverse());
     selectionRange = null;
     studentView = !studentView;
     render();
-  });
-
-  document.getElementById('copyGrid').addEventListener('click', async () => {
-    const text = seats.map(row => row.join('\t')).join('\n');
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast('表格已复制');
-    } catch (_) {
-      showToast('复制失败');
-    }
   });
 
 // 自定义右键菜单逻辑
@@ -400,6 +607,7 @@
   const menuPaste = document.getElementById('menuPaste');
 
   table.addEventListener('contextmenu', event => {
+    if (arrangeMode) { event.preventDefault(); return; }
     const editor = event.target.closest('.seat');
     if (!editor) return;
 

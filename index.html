@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>班级座位表视角转换器</title>
-<link rel="stylesheet" href="style.css?v=20261014-01">
+<title>班级座位表编辑神器</title>
+<link rel="stylesheet" href="style.css?v=20261015-01">
+<link rel="icon" href="favicon.jpg" type="image/jpeg">
 </head>
 <body>
 <main class="page">
   <div>
-    <h1>班级座位表视角转换器</h1>
+    <h1>班级座位表编辑神器</h1>
   </div>
 
   <div class="toolbar">
@@ -23,7 +24,7 @@
       </div>
     </div>
     <div class="toolbar-right">
-      <button class="btn" id="copyGrid" type="button">复制表格</button>
+      <button class="btn" id="arrangeBtn" type="button" aria-pressed="false">调整座位</button>
       <button class="btn primary" id="rotateBtn" type="button"><span id="rotateLabel">旋转 180°</span></button>
     </div>
   </div>
@@ -32,7 +33,8 @@
     <div class="view-state"><span class="state-dot"></span><span id="viewTitle">教师视角</span></div>
   </div>
   <div>
-    <h2>（拖动鼠标多选，可实现批量复制粘贴）</h2>
+    <h2>鼠标拖动多选，可批量复制粘贴；</h2>
+    <h2>点击“调整座位”后，拖动姓名可以互换座位，点 × 可以暂存姓名。</h2>
   </div>
   <section class="board">
     <div class="stage" id="topStage"><span class="stage-line"></span>讲 台<span class="stage-line"></span></div>
@@ -44,6 +46,16 @@
       <span id="seatCount">7 行 × 8 列</span>
     </div>
   </section>
+  <section class="waiting-panel" id="waitingPanel" hidden aria-label="待分配学生">
+    <div class="waiting-header">
+      <div>
+        <h2>待分配区</h2>
+        <p id="waitingHint">暂时移出的学生会放在这里。</p>
+      </div>
+      <span class="waiting-count" id="waitingCount">0 人</span>
+    </div>
+    <div class="waiting-list" id="waitingList"></div>
+  </section>
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="customMenu" class="custom-context-menu">
@@ -51,6 +63,6 @@
   <div class="menu-item" id="menuCut">剪切</div>
   <div class="menu-item" id="menuPaste">粘贴</div>
 </div>
-<script src="script.js?v=20261014-01"></script>
+<script src="script.js?v=20261015-01"></script>
 </body>
 </html>
