@@ -286,3 +286,9 @@ body.dragging-arrangement * {
   #arrangeBtn.primary:hover {
     background: linear-gradient(135deg, #dc2626, #b91c1c);
   }
+
+  /* 专用的过道列宽度控制 */
+  .aisle-col {
+    width: 28px !important; /* 过道宽度，可根据需要改成 20px 或 36px */
+    min-width: 28px !important;
+  }

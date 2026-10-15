@@ -76,6 +76,12 @@
     corner.textContent = '';
     headerRow.appendChild(corner);
     for (let c = 0; c < cols; c++) {
+      // 每两列之后自动插入一个专用的过道列表头
+      if (c > 0 && c % 2 === 0) {
+        const aisleTh = document.createElement('th');
+        aisleTh.className = 'aisle-col';
+        headerRow.appendChild(aisleTh);
+      }
       const th = document.createElement('th');
       const colNum = studentView ? cols - c : c + 1;
       th.textContent = `第${colNum}列`;
@@ -91,6 +97,12 @@
       rowHead.textContent = `第${rowNum}行`;
       tr.appendChild(rowHead);
       for (let c = 0; c < cols; c++) {
+        // 每两列之后自动插入一个专用的过道列单元格
+        if (c > 0 && c % 2 === 0) {
+          const aisleTd = document.createElement('td');
+          aisleTd.className = 'aisle-col';
+          tr.appendChild(aisleTd);
+        }
         const td = document.createElement('td');
         const editor = document.createElement('div');
         editor.className = 'seat' + (seats[r][c] ? ' has-text' : '') + (isInSelection(r, c) ? ' range-selected' : '');
