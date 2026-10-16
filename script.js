@@ -138,6 +138,15 @@
     saveState();
   }
 
+  function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
   function renderWaitingArea() {
     waitingPanel.hidden = !arrangeMode && unassigned.length === 0;
     waitingCount.textContent = `${unassigned.length} 人`;
@@ -321,17 +330,40 @@
     if (arrangeMode) return;
     const active = document.activeElement?.closest?.('.seat');
     
-    // 如果没有选中区域，且当前焦点不在座位内，或者在座位内选中了部分文字进行原生复制，则不干涉
     if (!selectionRange && active && window.getSelection().toString() !== '') {
       return; 
     }
-
     if (!selectionRange && !active) return;
 
     event.preventDefault();
-    event.clipboardData.setData('text/plain', getSelectedTextContent());
+
+    const text = getSelectedTextContent();
+    const html = getSelectedHtmlContent(); // 见下方定义
+
+    event.clipboardData.setData('text/plain', text);
+    event.clipboardData.setData('text/html', html);
     showToast('已复制所选座位');
   });
+
+  function getSelectedHtmlContent() {
+    if (selectionRange) {
+      let html = '<table><tbody>';
+      for (let r = selectionRange.top; r <= selectionRange.bottom; r++) {
+        html += '<tr>';
+        for (let c = selectionRange.left; c <= selectionRange.right; c++) {
+          const val = seats[r]?.[c] ?? '';
+          html += `<td>${escapeHtml(val)}</td>`;
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      return html;
+    } else {
+      const active = document.activeElement?.closest?.('.seat');
+      const val = active ? (seats[Number(active.dataset.r)]?.[Number(active.dataset.c)] ?? '') : '';
+      return `<table><tbody><tr><td>${escapeHtml(val)}</td></tr></tbody></table>`;
+    }
+  }
 
   // 监听剪切事件 (Ctrl + X)
   document.addEventListener('cut', event => {
@@ -649,11 +681,26 @@
   menuCopy.addEventListener('click', async () => {
     customMenu.classList.remove('show');
     const text = getSelectedTextContent();
+    const html = getSelectedHtmlContent();
     try {
-      await navigator.clipboard.writeText(text);
+      // 使用 Clipboard API 同时写入文本和 HTML 表格，确保粘贴到 Excel 时能分列分行
+      const blobPlain = new Blob([text], { type: 'text/plain' });
+      const blobHtml = new Blob([html], { type: 'text/html' });
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/plain': blobPlain,
+          'text/html': blobHtml
+        })
+      ]);
       showToast('已复制所选座位');
     } catch (_) {
-      showToast('复制失败');
+      // 降级兼容：如果浏览器不支持 ClipboardItem，则退回纯文本写入
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('已复制所选座位');
+      } catch (err) {
+        showToast('复制失败');
+      }
     }
   });
 
