@@ -28,6 +28,20 @@
   const waitingList = document.getElementById('waitingList');
   const waitingCount = document.getElementById('waitingCount');
   const waitingHint = document.getElementById('waitingHint');
+  const customMenu = document.getElementById('customMenu');
+  const menuCopy = document.getElementById('menuCopy');
+  const menuCut = document.getElementById('menuCut');
+  const menuPaste = document.getElementById('menuPaste');
+
+  // 公共工具函数：清理换行与空白
+  const cleanText = str => String(str ?? '').replace(/[\r\n]/g, ' ').trim();
+
+  // 公共工具函数：获取当前操作的起始坐标（选区优先，其次焦点）
+  const getStartCoords = () => {
+    if (selectionRange) return { r: selectionRange.top, c: selectionRange.left };
+    const active = document.activeElement?.closest?.('.seat');
+    return active ? { r: Number(active.dataset.r), c: Number(active.dataset.c) } : lastFocusedCell;
+  };
 
   function showToast(message) {
     toast.textContent = message;
@@ -48,12 +62,10 @@
       rows = Math.max(1, Math.min(MAX_SIZE, Number(saved.rows) || 7));
       cols = Math.max(1, Math.min(MAX_SIZE, Number(saved.cols) || 8));
       seats = Array.from({ length: rows }, (_, r) => 
-        Array.from({ length: cols }, (_, c) => String(saved.seats?.[r]?.[c] ?? '').replace(/[\r\n]/g, ' ').trim())
+        Array.from({ length: cols }, (_, c) => cleanText(saved.seats?.[r]?.[c]))
       );
       studentView = Boolean(saved.studentView);
-      unassigned = Array.isArray(saved.unassigned)
-        ? saved.unassigned.map(name => String(name ?? '').replace(/[\r\n]/g, ' ').trim()).filter(Boolean)
-        : [];
+      unassigned = Array.isArray(saved.unassigned) ? saved.unassigned.map(cleanText).filter(Boolean) : [];
     } catch (_) { }
   }
 
@@ -72,19 +84,15 @@
 
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    const corner = document.createElement('th');
-    corner.textContent = '';
-    headerRow.appendChild(corner);
+    headerRow.appendChild(document.createElement('th'));
     for (let c = 0; c < cols; c++) {
-      // 每两列之后自动插入一个专用的过道列表头
       if (c > 0 && c % 2 === 0) {
         const aisleTh = document.createElement('th');
         aisleTh.className = 'aisle-col';
         headerRow.appendChild(aisleTh);
       }
       const th = document.createElement('th');
-      const colNum = studentView ? cols - c : c + 1;
-      th.textContent = `第${colNum}列`;
+      th.textContent = `第${studentView ? cols - c : c + 1}列`;
       headerRow.appendChild(th);
     }
     thead.appendChild(headerRow);
@@ -93,11 +101,9 @@
     for (let r = 0; r < rows; r++) {
       const tr = document.createElement('tr');
       const rowHead = document.createElement('th');
-      const rowNum = studentView ? r + 1 : rows - r;
-      rowHead.textContent = `第${rowNum}行`;
+      rowHead.textContent = `第${studentView ? r + 1 : rows - r}行`;
       tr.appendChild(rowHead);
       for (let c = 0; c < cols; c++) {
-        // 每两列之后自动插入一个专用的过道列单元格
         if (c > 0 && c % 2 === 0) {
           const aisleTd = document.createElement('td');
           aisleTd.className = 'aisle-col';
@@ -109,6 +115,7 @@
         editor.spellcheck = false;
         editor.dataset.r = String(r);
         editor.dataset.c = String(c);
+
         if (arrangeMode) {
           editor.contentEditable = 'false';
           const label = document.createElement('span');
@@ -139,13 +146,8 @@
   }
 
   function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
 
   function renderWaitingArea() {
     waitingPanel.hidden = !arrangeMode && unassigned.length === 0;
@@ -173,19 +175,14 @@
     });
   }
 
-  function isInSelection(r, c) {
-    if (!selectionRange) return false;
-    return r >= selectionRange.top && r <= selectionRange.bottom && c >= selectionRange.left && c <= selectionRange.right;
-  }
+  const isInSelection = (r, c) => selectionRange && r >= selectionRange.top && r <= selectionRange.bottom && c >= selectionRange.left && c <= selectionRange.right;
 
-  function normalizeRange(a, b) {
-    return {
-      top: Math.min(a.r, b.r),
-      left: Math.min(a.c, b.c),
-      bottom: Math.max(a.r, b.r),
-      right: Math.max(a.c, b.c)
-    };
-  }
+  const normalizeRange = (a, b) => ({
+    top: Math.min(a.r, b.r),
+    left: Math.min(a.c, b.c),
+    bottom: Math.max(a.r, b.r),
+    right: Math.max(a.c, b.c)
+  });
 
   function paintSelection() {
     table.querySelectorAll('.seat').forEach(cell => {
@@ -193,10 +190,7 @@
     });
   }
 
-  function selectedAreaSize() {
-    if (!selectionRange) return 1;
-    return (selectionRange.bottom - selectionRange.top + 1) * (selectionRange.right - selectionRange.left + 1);
-  }
+  const selectedAreaSize = () => selectionRange ? (selectionRange.bottom - selectionRange.top + 1) * (selectionRange.right - selectionRange.left + 1) : 1;
 
   function resizeGrid(newRows, newCols) {
     selectionRange = null;
@@ -235,11 +229,8 @@
 
     matrix.forEach((line, r) => {
       line.forEach((value, c) => {
-        const rr = startR + r;
-        const cc = startC + c;
-        if (rr < rows && cc < cols) {
-          seats[rr][cc] = String(value || '').replace(/[\r\n]/g, ' ').trim();
-        }
+        const rr = startR + r, cc = startC + c;
+        if (rr < rows && cc < cols) seats[rr][cc] = cleanText(value);
       });
     });
 
@@ -259,7 +250,7 @@
     const editor = event.target.closest('.seat');
     if (!editor) return;
     const r = Number(editor.dataset.r), c = Number(editor.dataset.c);
-    seats[r][c] = editor.textContent.replace(/[\r\n]/g, ' ').trim();
+    seats[r][c] = cleanText(editor.textContent);
     editor.classList.toggle('has-text', Boolean(seats[r][c]));
     lastFocusedCell = { r, c };
     if (selectionRange) { selectionRange = null; paintSelection(); }
@@ -272,9 +263,8 @@
   document.addEventListener('paste', event => {
     if (arrangeMode) return;
     const active = document.activeElement?.closest?.('.seat');
-    if (!active && !selectionRange) return;
     const clipboard = event.clipboardData;
-    if (!clipboard) return;
+    if ((!active && !selectionRange) || !clipboard) return;
 
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -303,8 +293,7 @@
 
     if (matrix.length === 0) return;
 
-    const startR = selectionRange ? selectionRange.top : (active ? Number(active.dataset.r) : lastFocusedCell.r);
-    const startC = selectionRange ? selectionRange.left : (active ? Number(active.dataset.c) : lastFocusedCell.c);
+    const { r: startR, c: startC } = getStartCoords();
 
     if (selectionRange && selectedAreaSize() > 1 && matrix.length === 1 && matrix[0].length === 1) {
       const plainText = matrix[0][0];
@@ -325,106 +314,61 @@
     pasteMatrix(startR, startC, matrix);
   }, true);
 
-  // 监听复制事件 (Ctrl + C)
+  const getSelectedTextContent = () => {
+    if (selectionRange) {
+      return Array.from({ length: selectionRange.bottom - selectionRange.top + 1 }, (_, i) => {
+        const r = selectionRange.top + i;
+        return Array.from({ length: selectionRange.right - selectionRange.left + 1 }, (_, j) => {
+          const c = selectionRange.left + j;
+          return seats[r]?.[c] ?? '';
+        }).join('\t');
+      }).join('\n');
+    }
+    const active = document.activeElement?.closest?.('.seat');
+    return active ? (seats[Number(active.dataset.r)]?.[Number(active.dataset.c)] ?? '') : '';
+  };
+
+  const getSelectedHtmlContent = () => {
+    const range = selectionRange || { top: lastFocusedCell.r, bottom: lastFocusedCell.r, left: lastFocusedCell.c, right: lastFocusedCell.c };
+    let html = '<table><tbody>';
+    for (let r = range.top; r <= range.bottom; r++) {
+      html += '<tr>';
+      for (let c = range.left; c <= range.right; c++) {
+        html += `<td>${escapeHtml(seats[r]?.[c] ?? '')}</td>`;
+      }
+      html += '</tr>';
+    }
+    return html + '</tbody></table>';
+  };
+
   document.addEventListener('copy', event => {
     if (arrangeMode) return;
     const active = document.activeElement?.closest?.('.seat');
-    
-    if (!selectionRange && active && window.getSelection().toString() !== '') {
-      return; 
-    }
-    if (!selectionRange && !active) return;
+    if (!selectionRange && (!active || window.getSelection().toString() === '')) return;
 
     event.preventDefault();
-
-    const text = getSelectedTextContent();
-    const html = getSelectedHtmlContent(); // 见下方定义
-
-    event.clipboardData.setData('text/plain', text);
-    event.clipboardData.setData('text/html', html);
+    event.clipboardData.setData('text/plain', getSelectedTextContent());
+    event.clipboardData.setData('text/html', getSelectedHtmlContent());
     showToast('已复制所选座位');
   });
 
-  function getSelectedHtmlContent() {
-    if (selectionRange) {
-      let html = '<table><tbody>';
-      for (let r = selectionRange.top; r <= selectionRange.bottom; r++) {
-        html += '<tr>';
-        for (let c = selectionRange.left; c <= selectionRange.right; c++) {
-          const val = seats[r]?.[c] ?? '';
-          html += `<td>${escapeHtml(val)}</td>`;
-        }
-        html += '</tr>';
-      }
-      html += '</tbody></table>';
-      return html;
-    } else {
-      const active = document.activeElement?.closest?.('.seat');
-      const val = active ? (seats[Number(active.dataset.r)]?.[Number(active.dataset.c)] ?? '') : '';
-      return `<table><tbody><tr><td>${escapeHtml(val)}</td></tr></tbody></table>`;
-    }
-  }
-
-  // 监听剪切事件 (Ctrl + X)
   document.addEventListener('cut', event => {
     if (arrangeMode) return;
     const active = document.activeElement?.closest?.('.seat');
-    if (!selectionRange && active && window.getSelection().toString() !== '') {
-      return;
-    }
-
-    if (!selectionRange && !active) return;
+    if (!selectionRange && (!active || window.getSelection().toString() === '')) return;
 
     event.preventDefault();
-    
-    // 1. 复制文本到剪贴板
-    const text = getSelectedTextContent();
-    event.clipboardData.setData('text/plain', text);
+    event.clipboardData.setData('text/plain', getSelectedTextContent());
 
-    // 2. 清空所选区域的座位内容
-    if (selectionRange) {
-      const range = { ...selectionRange };
-      for (let rr = range.top; rr <= range.bottom; rr++) {
-        for (let cc = range.left; cc <= range.right; cc++) {
-          seats[rr][cc] = '';
-        }
-      }
-      selectionRange = null;
-      render();
-      focusCell(range.top, range.left);
-      showToast('已剪切所选座位');
-    } else if (active) {
-      const r = Number(active.dataset.r);
-      const c = Number(active.dataset.c);
-      seats[r][c] = '';
-      render();
-      focusCell(r, c);
-      showToast('已剪切该座位');
+    const range = selectionRange || { top: Number(active.dataset.r), bottom: Number(active.dataset.r), left: Number(active.dataset.c), right: Number(active.dataset.c) };
+    for (let r = range.top; r <= range.bottom; r++) {
+      for (let c = range.left; c <= range.right; c++) seats[r][c] = '';
     }
+    selectionRange = null;
+    render();
+    focusCell(range.top, range.left);
+    showToast('已剪切所选座位');
   });
-
-  // 辅助函数：获取当前选区或当前聚焦格子的文本内容（行列矩阵格式）
-  function getSelectedTextContent() {
-    if (selectionRange) {
-      const rowsData = [];
-      for (let r = selectionRange.top; r <= selectionRange.bottom; r++) {
-        const rowData = [];
-        for (let c = selectionRange.left; c <= selectionRange.right; c++) {
-          rowData.push(seats[r]?.[c] ?? '');
-        }
-        rowsData.push(rowData.join('\t'));
-      }
-      return rowsData.join('\n');
-    } else {
-      const active = document.activeElement?.closest?.('.seat');
-      if (active) {
-        const r = Number(active.dataset.r);
-        const c = Number(active.dataset.c);
-        return seats[r]?.[c] ?? '';
-      }
-    }
-    return '';
-  }
 
   table.addEventListener('mousedown', event => {
     if (arrangeMode) return;
@@ -436,8 +380,7 @@
   });
 
   document.addEventListener('mousemove', event => {
-    if (arrangeMode) return;
-    if (!pointerDown || !(event.buttons & 1)) return;
+    if (arrangeMode || !pointerDown || !(event.buttons & 1)) return;
     if (!dragSelecting && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 4) return;
     dragSelecting = true;
     document.body.classList.add('dragging-seats');
@@ -450,8 +393,7 @@
   });
 
   document.addEventListener('mouseup', () => {
-    if (arrangeMode) return;
-    if (!pointerDown) return;
+    if (arrangeMode || !pointerDown) return;
     document.body.classList.remove('dragging-seats');
     if (!dragSelecting) { selectionRange = null; paintSelection(); }
     pointerDown = null;
@@ -463,15 +405,16 @@
     const editor = event.target.closest('.seat');
     if (!editor) return;
     const r = Number(editor.dataset.r), c = Number(editor.dataset.c);
-    if (selectionRange && selectedAreaSize() > 1 && (event.key === 'Delete' || event.key === 'Backspace')) {
+    
+    if (selectionRange && selectedAreaSize() > 1 && ['Delete', 'Backspace'].includes(event.key)) {
       event.preventDefault();
-      const range = { ...selectionRange };
-      for (let rr = range.top; rr <= range.bottom; rr++) {
-        for (let cc = range.left; cc <= range.right; cc++) seats[rr][cc] = '';
+      for (let rr = selectionRange.top; rr <= selectionRange.bottom; rr++) {
+        for (let cc = selectionRange.left; cc <= selectionRange.right; cc++) seats[rr][cc] = '';
       }
+      const top = selectionRange.top, left = selectionRange.left;
       selectionRange = null;
       render();
-      focusCell(range.top, range.left);
+      focusCell(top, left);
       showToast('已清空所选座位');
       return;
     }
@@ -480,9 +423,8 @@
       focusCell(Math.min(rows - 1, r + 1), c);
     } else if (event.key === 'Tab') {
       event.preventDefault();
-      const next = event.shiftKey ? (r * cols + c - 1) : (r * cols + c + 1);
-      const bounded = Math.max(0, Math.min(rows * cols - 1, next));
-      focusCell(Math.floor(bounded / cols), bounded % cols);
+      const next = Math.max(0, Math.min(rows * cols - 1, event.shiftKey ? (r * cols + c - 1) : (r * cols + c + 1)));
+      focusCell(Math.floor(next / cols), next % cols);
     }
   });
 
@@ -491,16 +433,12 @@
     selectionRange = null;
     pointerDown = null;
     dragSelecting = false;
-    document.body.classList.remove('dragging-seats');
-    document.body.classList.remove('dragging-arrangement');
+    document.body.classList.remove('dragging-seats', 'dragging-arrangement');
     customMenu.classList.remove('show');
     render();
-    showToast(arrangeMode
-      ? '已进入调整模式：拖动学生交换位置，点 × 可移至待分配区'
-      : '已完成座位调整');
+    showToast(arrangeMode ? '已进入调整模式：拖动学生交换位置，点 × 可移至待分配区' : '已完成座位调整');
   });
 
-  // 叉号：将学生暂时放入待分配区
   table.addEventListener('click', event => {
     const removeButton = event.target.closest('.remove-seat');
     if (!removeButton || !arrangeMode) return;
@@ -508,8 +446,7 @@
     event.stopPropagation();
     const editor = removeButton.closest('.seat');
     if (!editor) return;
-    const r = Number(editor.dataset.r);
-    const c = Number(editor.dataset.c);
+    const r = Number(editor.dataset.r), c = Number(editor.dataset.c);
     const name = seats[r]?.[c] ?? '';
     if (!name) return;
     seats[r][c] = '';
@@ -520,49 +457,39 @@
   });
 
   function beginArrangeDrag(event, source, element) {
-    if (!arrangeMode || !element) return;
-    if (event.button !== undefined && event.button !== 0) return;
+    if (!arrangeMode || !element || (event.button !== undefined && event.button !== 0)) return;
     event.preventDefault();
-    arrangeDrag = {
-      source,
-      element,
-      startX: event.clientX,
-      startY: event.clientY,
-      started: false,
-      target: null
-    };
+    arrangeDrag = { source, element, startX: event.clientX, startY: event.clientY, started: false, target: null };
   }
 
   table.addEventListener('pointerdown', event => {
     if (!arrangeMode || event.target.closest('.remove-seat')) return;
     const editor = event.target.closest('.seat');
-    if (!editor || !table.contains(editor)) return;
-    const r = Number(editor.dataset.r);
-    const c = Number(editor.dataset.c);
-    if (!seats[r]?.[c]) return;
-    beginArrangeDrag(event, { type: 'seat', r, c }, editor);
+    if (editor && table.contains(editor) && seats[editor.dataset.r]?.[editor.dataset.c]) {
+      beginArrangeDrag(event, { type: 'seat', r: Number(editor.dataset.r), c: Number(editor.dataset.c) }, editor);
+    }
   });
 
   waitingList.addEventListener('pointerdown', event => {
     if (!arrangeMode) return;
     const item = event.target.closest('.waiting-item');
-    if (!item || !waitingList.contains(item)) return;
-    beginArrangeDrag(event, { type: 'waiting', index: Number(item.dataset.index) }, item);
+    if (item && waitingList.contains(item)) {
+      beginArrangeDrag(event, { type: 'waiting', index: Number(item.dataset.index) }, item);
+    }
   });
 
-  function clearArrangeDropTarget() {
-    table.querySelectorAll('.drop-target').forEach(element => element.classList.remove('drop-target'));
-    waitingPanel.classList.remove('drop-target');
-    if (arrangeDrag) arrangeDrag.target = null;
-  }
-
-  function cleanArrangeDrag() {
+  // 合并后的拖拽清理与提交函数
+  function cleanArrangeDrag(commit = false) {
     document.body.classList.remove('dragging-arrangement');
-    table.querySelectorAll('.dragging-seat, .drop-target').forEach(element => {
-      element.classList.remove('dragging-seat', 'drop-target');
-    });
-    waitingList.querySelectorAll('.dragging-seat').forEach(element => element.classList.remove('dragging-seat'));
+    table.querySelectorAll('.dragging-seat, .drop-target').forEach(el => el.classList.remove('dragging-seat', 'drop-target'));
+    waitingList.querySelectorAll('.dragging-seat').forEach(el => el.classList.remove('dragging-seat'));
     waitingPanel.classList.remove('drop-target');
+
+    if (arrangeDrag) {
+      const drag = arrangeDrag;
+      arrangeDrag = null;
+      if (commit && drag.started && drag.target) performArrangeDrop(drag.source, drag.target);
+    }
   }
 
   document.addEventListener('pointermove', event => {
@@ -574,32 +501,25 @@
       arrangeDrag.element.classList.add('dragging-seat');
     }
     event.preventDefault();
-    clearArrangeDropTarget();
+    
+    // 清除原有高亮
+    table.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    waitingPanel.classList.remove('drop-target');
+    arrangeDrag.target = null;
+
     const underPointer = document.elementFromPoint(event.clientX, event.clientY);
     const targetSeat = underPointer?.closest?.('.seat');
     if (targetSeat && table.contains(targetSeat)) {
       targetSeat.classList.add('drop-target');
-      arrangeDrag.target = {
-        type: 'seat',
-        r: Number(targetSeat.dataset.r),
-        c: Number(targetSeat.dataset.c)
-      };
+      arrangeDrag.target = { type: 'seat', r: Number(targetSeat.dataset.r), c: Number(targetSeat.dataset.c) };
     } else if (arrangeDrag.source.type === 'seat' && underPointer && waitingPanel.contains(underPointer)) {
       waitingPanel.classList.add('drop-target');
       arrangeDrag.target = { type: 'waiting' };
     }
   }, { passive: false });
 
-  function finishArrangeDrag(commit) {
-    if (!arrangeDrag) return;
-    const drag = arrangeDrag;
-    arrangeDrag = null;
-    cleanArrangeDrag();
-    if (commit && drag.started && drag.target) performArrangeDrop(drag.source, drag.target);
-  }
-
-  document.addEventListener('pointerup', () => finishArrangeDrag(true));
-  document.addEventListener('pointercancel', () => finishArrangeDrag(false));
+  document.addEventListener('pointerup', () => cleanArrangeDrag(true));
+  document.addEventListener('pointercancel', () => cleanArrangeDrag(false));
 
   function performArrangeDrop(source, target) {
     selectionRange = null;
@@ -613,8 +533,7 @@
         showToast(`${sourceName} 已移至待分配区`);
         return;
       }
-      if (target.type === 'seat') {
-        if (source.r === target.r && source.c === target.c) return;
+      if (target.type === 'seat' && (source.r !== target.r || source.c !== target.c)) {
         const targetName = seats[target.r]?.[target.c] ?? '';
         seats[source.r][source.c] = targetName;
         seats[target.r][target.c] = sourceName;
@@ -644,99 +563,57 @@
     render();
   });
 
-// 自定义右键菜单逻辑
-  const customMenu = document.getElementById('customMenu');
-  const menuCopy = document.getElementById('menuCopy');
-  const menuCut = document.getElementById('menuCut');
-  const menuPaste = document.getElementById('menuPaste');
-
+  // 自定义右键菜单逻辑
   table.addEventListener('contextmenu', event => {
     if (arrangeMode) { event.preventDefault(); return; }
     const editor = event.target.closest('.seat');
     if (!editor) return;
 
-    event.preventDefault(); // 阻止浏览器默认右键菜单
-    
-    // 如果右键的点不在当前多选区域内，且没有点中已选中的格子，则重置选中单格
-    const r = Number(editor.dataset.r);
-    const c = Number(editor.dataset.c);
+    event.preventDefault();
+    const r = Number(editor.dataset.r), c = Number(editor.dataset.c);
     if (!isInSelection(r, c)) {
       selectionRange = null;
       paintSelection();
       focusCell(r, c);
     }
 
-    // 显示自定义菜单
     customMenu.style.top = `${Math.min(event.clientY, window.innerHeight - 150)}px`;
     customMenu.style.left = `${Math.min(event.clientX, window.innerWidth - 150)}px`;
     customMenu.classList.add('show');
   });
 
-  // 点击页面其他地方隐藏右键菜单
-  document.addEventListener('click', () => {
-    customMenu.classList.remove('show');
-  });
+  document.addEventListener('click', () => customMenu.classList.remove('show'));
 
-  // 右键菜单项：复制
   menuCopy.addEventListener('click', async () => {
     customMenu.classList.remove('show');
-    const text = getSelectedTextContent();
-    const html = getSelectedHtmlContent();
     try {
-      // 使用 Clipboard API 同时写入文本和 HTML 表格，确保粘贴到 Excel 时能分列分行
-      const blobPlain = new Blob([text], { type: 'text/plain' });
-      const blobHtml = new Blob([html], { type: 'text/html' });
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'text/plain': blobPlain,
-          'text/html': blobHtml
-        })
-      ]);
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/plain': new Blob([getSelectedTextContent()], { type: 'text/plain' }),
+        'text/html': new Blob([getSelectedHtmlContent()], { type: 'text/html' })
+      })]);
       showToast('已复制所选座位');
     } catch (_) {
-      // 降级兼容：如果浏览器不支持 ClipboardItem，则退回纯文本写入
       try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(getSelectedTextContent());
         showToast('已复制所选座位');
-      } catch (err) {
-        showToast('复制失败');
-      }
+      } catch (err) { showToast('复制失败'); }
     }
   });
 
-  // 右键菜单项：剪切
   menuCut.addEventListener('click', async () => {
     customMenu.classList.remove('show');
-    const text = getSelectedTextContent();
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch (_) {}
+    try { await navigator.clipboard.writeText(getSelectedTextContent()); } catch (_) {}
 
-    if (selectionRange) {
-      const range = { ...selectionRange };
-      for (let rr = range.top; rr <= range.bottom; rr++) {
-        for (let cc = range.left; cc <= range.right; cc++) {
-          seats[rr][cc] = '';
-        }
-      }
-      selectionRange = null;
-      render();
-      focusCell(range.top, range.left);
-      showToast('已剪切所选座位');
-    } else {
-      const active = document.activeElement?.closest?.('.seat');
-      if (active) {
-        const r = Number(active.dataset.r);
-        const c = Number(active.dataset.c);
-        seats[r][c] = '';
-        render();
-        focusCell(r, c);
-        showToast('已剪切该座位');
-      }
+    const range = selectionRange || { top: lastFocusedCell.r, bottom: lastFocusedCell.r, left: lastFocusedCell.c, right: lastFocusedCell.c };
+    for (let rr = range.top; rr <= range.bottom; rr++) {
+      for (let cc = range.left; cc <= range.right; cc++) seats[rr][cc] = '';
     }
+    selectionRange = null;
+    render();
+    focusCell(range.top, range.left);
+    showToast('已剪切所选座位');
   });
 
-  // 右键菜单项：粘贴
   menuPaste.addEventListener('click', async () => {
     customMenu.classList.remove('show');
     try {
@@ -745,11 +622,7 @@
       const lines = text.replace(/\r\n?/g, '\n').split('\n');
       if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
       const matrix = lines.map(line => line.split('\t').map(x => x.trim()));
-      
-      const active = document.activeElement?.closest?.('.seat');
-      const startR = selectionRange ? selectionRange.top : (active ? Number(active.dataset.r) : lastFocusedCell.r);
-      const startC = selectionRange ? selectionRange.left : (active ? Number(active.dataset.c) : lastFocusedCell.c);
-      
+      const { r: startR, c: startC } = getStartCoords();
       pasteMatrix(startR, startC, matrix);
     } catch (err) {
       showToast('粘贴失败，请使用 Ctrl+V');
