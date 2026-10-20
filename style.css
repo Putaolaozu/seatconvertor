@@ -242,3 +242,35 @@ body.dragging-arrangement, body.dragging-arrangement * {
 @media (prefers-reduced-motion: reduce) {
   .arranging-seats .seat.has-text { animation-duration: .6s; }
 }
+
+/* 撤销按钮：仅显示回转箭头图标 */
+#undoBtn {
+  flex: 0 0 46px;
+  width: 46px;
+  min-width: 46px;
+  height: 46px;
+  padding: 0;
+  color: var(--muted);
+}
+#undoBtn svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+#undoBtn:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+  background: #f4f5f1;
+}
+#undoBtn:not(:disabled):hover {
+  color: var(--accent-hover);
+  background: var(--accent-soft);
+  border-color: #a6cec7;
+}
+@media (max-width: 700px) {
+  .toolbar-right #undoBtn { flex: 0 0 46px; }
+}

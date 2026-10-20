@@ -1,47 +1,25 @@
 (() => {
   const STORAGE_KEY = 'classroom-seat-view-converter-v6';
   const MAX_SIZE = 20;
-  let rows = 7;
-  let cols = 8;
+  const MAX_UNDO_STEPS = 100;
+  
+  let undoHistory = [], isComposingSeat = false, compositionUndoPending = false;
+  let rows = 7, cols = 8, studentView = false, arrangeMode = false;
   let seats = Array.from({ length: rows }, () => Array(cols).fill(''));
-  let unassigned = [];
-  let studentView = false;
-  let arrangeMode = false;
-  let arrangeDrag = null;
-  let toastTimer;
-  let pointerDown = null;
-  let dragSelecting = false;
-  let selectionRange = null;
+  let unassigned = [], arrangeDrag = null, toastTimer = null;
+  let pointerDown = null, dragSelecting = false, selectionRange = null;
   let lastFocusedCell = { r: 0, c: 0 };
 
-  const table = document.getElementById('seatTable');
-  const rowsInput = document.getElementById('rowsInput');
-  const colsInput = document.getElementById('colsInput');
-  const viewTitle = document.getElementById('viewTitle');
-  const rotateLabel = document.getElementById('rotateLabel');
-  const topStage = document.getElementById('topStage');
-  const bottomStage = document.getElementById('bottomStage');
-  const seatCount = document.getElementById('seatCount');
-  const toast = document.getElementById('toast');
-  const arrangeBtn = document.getElementById('arrangeBtn');
-  const waitingPanel = document.getElementById('waitingPanel');
-  const waitingList = document.getElementById('waitingList');
-  const waitingCount = document.getElementById('waitingCount');
-  const waitingHint = document.getElementById('waitingHint');
-  const customMenu = document.getElementById('customMenu');
-  const menuCopy = document.getElementById('menuCopy');
-  const menuCut = document.getElementById('menuCut');
-  const menuPaste = document.getElementById('menuPaste');
+  const get = id => document.getElementById(id);
+  const [table, rowsInput, colsInput, viewTitle, rotateLabel, topStage, bottomStage, seatCount, toast, arrangeBtn, undoBtn, waitingPanel, waitingList, waitingCount, waitingHint, customMenu, menuCopy, menuCut, menuPaste] =
+    ['seatTable', 'rowsInput', 'colsInput', 'viewTitle', 'rotateLabel', 'topStage', 'bottomStage', 'seatCount', 'toast', 'arrangeBtn', 'undoBtn', 'waitingPanel', 'waitingList', 'waitingCount', 'waitingHint', 'customMenu', 'menuCopy', 'menuCut', 'menuPaste'].map(get);
 
-  // 公共工具函数：清理换行与空白
   const cleanText = str => String(str ?? '').replace(/[\r\n]/g, ' ').trim();
-
-  // 公共工具函数：获取当前操作的起始坐标（选区优先，其次焦点）
-  const getStartCoords = () => {
-    if (selectionRange) return { r: selectionRange.top, c: selectionRange.left };
-    const active = document.activeElement?.closest?.('.seat');
-    return active ? { r: Number(active.dataset.r), c: Number(active.dataset.c) } : lastFocusedCell;
-  };
+  const escapeHtml = str => String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
+  const normalizeRange = (a, b) => ({ top: Math.min(a.r, b.r), left: Math.min(a.c, b.c), bottom: Math.max(a.r, b.r), right: Math.max(a.c, b.c) });
+  const isInSelection = (r, c) => selectionRange && r >= selectionRange.top && r <= selectionRange.bottom && c >= selectionRange.left && c <= selectionRange.right;
+  const selectedAreaSize = () => selectionRange ? (selectionRange.bottom - selectionRange.top + 1) * (selectionRange.right - selectionRange.left + 1) : 1;
+  const getStartCoords = () => selectionRange ? { r: selectionRange.top, c: selectionRange.left } : (document.activeElement?.closest?.('.seat') ? { r: Number(document.activeElement.dataset.r), c: Number(document.activeElement.dataset.c) } : lastFocusedCell);
 
   function showToast(message) {
     toast.textContent = message;
@@ -51,8 +29,35 @@
   }
 
   function saveState() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ rows, cols, seats, studentView, unassigned })); }
-    catch (_) { }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ rows, cols, seats, studentView, unassigned })); } catch (_) {}
+  }
+
+  const getSnapshot = () => ({ rows, cols, seats: seats.map(r => [...r]), studentView, unassigned: [...unassigned], lastFocusedCell: { ...lastFocusedCell } });
+
+  function updateUndoButton() {
+    undoBtn.disabled = undoHistory.length === 0;
+    undoBtn.title = undoBtn.disabled ? '暂无可撤销的操作' : '撤销（Ctrl+Z）';
+  }
+
+  function recordUndo() {
+    const snapshot = getSnapshot();
+    if (JSON.stringify(undoHistory[undoHistory.length - 1]) === JSON.stringify(snapshot)) return;
+    undoHistory.push(snapshot);
+    if (undoHistory.length > MAX_UNDO_STEPS) undoHistory.shift();
+    updateUndoButton();
+  }
+
+  function undo() {
+    if (undoHistory.length === 0) return showToast('没有可撤销的操作');
+    const s = undoHistory.pop();
+    [rows, cols, studentView, seats, unassigned] = [s.rows, s.cols, s.studentView, s.seats.map(r => [...r]), [...s.unassigned]];
+    lastFocusedCell = { r: Math.max(0, Math.min(rows - 1, s.lastFocusedCell?.r ?? 0)), c: Math.max(0, Math.min(cols - 1, s.lastFocusedCell?.c ?? 0)) };
+    selectionRange = pointerDown = dragSelecting = arrangeDrag = null;
+    customMenu.classList.remove('show');
+    document.body.classList.remove('dragging-seats', 'dragging-arrangement');
+    render();
+    if (!arrangeMode) focusCell(lastFocusedCell.r, lastFocusedCell.c);
+    showToast('已撤销');
   }
 
   function loadState() {
@@ -61,12 +66,33 @@
       if (!saved || !Array.isArray(saved.seats)) return;
       rows = Math.max(1, Math.min(MAX_SIZE, Number(saved.rows) || 7));
       cols = Math.max(1, Math.min(MAX_SIZE, Number(saved.cols) || 8));
-      seats = Array.from({ length: rows }, (_, r) => 
-        Array.from({ length: cols }, (_, c) => cleanText(saved.seats?.[r]?.[c]))
-      );
+      seats = Array.from({ length: rows }, (_, r) => Array.from({ length: cols }, (_, c) => cleanText(saved.seats?.[r]?.[c])));
       studentView = Boolean(saved.studentView);
       unassigned = Array.isArray(saved.unassigned) ? saved.unassigned.map(cleanText).filter(Boolean) : [];
-    } catch (_) { }
+    } catch (_) {}
+  }
+
+  function renderWaitingArea() {
+    waitingPanel.hidden = !arrangeMode && unassigned.length === 0;
+    waitingCount.textContent = `${unassigned.length} 人`;
+    waitingHint.textContent = arrangeMode ? '拖动学生到其他座位可交换位置；拖到空座位可直接安排，也可点右上角 × 暂时移出。' : '学生暂存在这里。点击“调整座位”后，可将学生拖回座位。';
+    waitingList.replaceChildren();
+
+    if (unassigned.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'waiting-empty';
+      empty.textContent = arrangeMode ? '把学生拖到这里暂时待分配' : '暂无待分配学生';
+      waitingList.appendChild(empty);
+      return;
+    }
+
+    unassigned.forEach((name, index) => {
+      const item = document.createElement('div');
+      item.className = 'waiting-item';
+      item.dataset.index = index;
+      item.textContent = name;
+      waitingList.appendChild(item);
+    });
   }
 
   function render() {
@@ -75,7 +101,7 @@
     viewTitle.textContent = studentView ? '学生视角' : '教师视角';
     rotateLabel.textContent = studentView ? '恢复视角' : '旋转 180°';
     arrangeBtn.textContent = arrangeMode ? '完成调整' : '调整座位';
-    arrangeBtn.setAttribute('aria-pressed', String(arrangeMode));
+    arrangeBtn.setAttribute('aria-pressed', arrangeMode);
     arrangeBtn.classList.toggle('primary', arrangeMode);
     document.body.classList.toggle('arranging-seats', arrangeMode);
     topStage.hidden = !studentView;
@@ -87,9 +113,9 @@
     headerRow.appendChild(document.createElement('th'));
     for (let c = 0; c < cols; c++) {
       if (c > 0 && c % 2 === 0) {
-        const aisleTh = document.createElement('th');
-        aisleTh.className = 'aisle-col';
-        headerRow.appendChild(aisleTh);
+        const thAis = document.createElement('th');
+        thAis.className = 'aisle-col';
+        headerRow.appendChild(thAis);
       }
       const th = document.createElement('th');
       th.textContent = `第${studentView ? cols - c : c + 1}列`;
@@ -105,16 +131,16 @@
       tr.appendChild(rowHead);
       for (let c = 0; c < cols; c++) {
         if (c > 0 && c % 2 === 0) {
-          const aisleTd = document.createElement('td');
-          aisleTd.className = 'aisle-col';
-          tr.appendChild(aisleTd);
+          const tdAis = document.createElement('td');
+          tdAis.className = 'aisle-col';
+          tr.appendChild(tdAis);
         }
         const td = document.createElement('td');
         const editor = document.createElement('div');
-        editor.className = 'seat' + (seats[r][c] ? ' has-text' : '') + (isInSelection(r, c) ? ' range-selected' : '');
+        editor.className = `seat${seats[r][c] ? ' has-text' : ''}${isInSelection(r, c) ? ' range-selected' : ''}`;
         editor.spellcheck = false;
-        editor.dataset.r = String(r);
-        editor.dataset.c = String(c);
+        editor.dataset.r = r;
+        editor.dataset.c = c;
 
         if (arrangeMode) {
           editor.contentEditable = 'false';
@@ -123,13 +149,12 @@
           label.textContent = seats[r][c];
           editor.appendChild(label);
           if (seats[r][c]) {
-            const removeButton = document.createElement('button');
-            removeButton.type = 'button';
-            removeButton.className = 'remove-seat';
-            removeButton.textContent = '×';
-            removeButton.title = '移至待分配区';
-            removeButton.setAttribute('aria-label', `将${seats[r][c]}移至待分配区`);
-            editor.appendChild(removeButton);
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'remove-seat';
+            btn.textContent = '×';
+            btn.title = '移至待分配区';
+            editor.appendChild(btn);
           }
         } else {
           editor.contentEditable = 'true';
@@ -143,59 +168,17 @@
     table.replaceChildren(thead, tbody);
     renderWaitingArea();
     saveState();
+    updateUndoButton();
   }
-
-  function escapeHtml(str) {
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-  }
-
-  function renderWaitingArea() {
-    waitingPanel.hidden = !arrangeMode && unassigned.length === 0;
-    waitingCount.textContent = `${unassigned.length} 人`;
-    waitingHint.textContent = arrangeMode
-      ? '拖动学生到其他座位可交换位置；拖到空座位可直接安排，也可点右上角 × 暂时移出。'
-      : '学生暂存在这里。点击“调整座位”后，可将学生拖回座位。';
-    waitingList.replaceChildren();
-
-    if (unassigned.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'waiting-empty';
-      empty.textContent = arrangeMode ? '把学生拖到这里暂时待分配' : '暂无待分配学生';
-      waitingList.appendChild(empty);
-      return;
-    }
-
-    unassigned.forEach((name, index) => {
-      const item = document.createElement('div');
-      item.className = 'waiting-item';
-      item.dataset.index = String(index);
-      item.textContent = name;
-      item.setAttribute('aria-label', arrangeMode ? `拖动学生${name}安排座位` : name);
-      waitingList.appendChild(item);
-    });
-  }
-
-  const isInSelection = (r, c) => selectionRange && r >= selectionRange.top && r <= selectionRange.bottom && c >= selectionRange.left && c <= selectionRange.right;
-
-  const normalizeRange = (a, b) => ({
-    top: Math.min(a.r, b.r),
-    left: Math.min(a.c, b.c),
-    bottom: Math.max(a.r, b.r),
-    right: Math.max(a.c, b.c)
-  });
-
-  function paintSelection() {
-    table.querySelectorAll('.seat').forEach(cell => {
-      cell.classList.toggle('range-selected', isInSelection(Number(cell.dataset.r), Number(cell.dataset.c)));
-    });
-  }
-
-  const selectedAreaSize = () => selectionRange ? (selectionRange.bottom - selectionRange.top + 1) * (selectionRange.right - selectionRange.left + 1) : 1;
 
   function resizeGrid(newRows, newCols) {
+    const nextRows = Math.max(1, Math.min(MAX_SIZE, Math.floor(newRows || 1)));
+    const nextCols = Math.max(1, Math.min(MAX_SIZE, Math.floor(newCols || 1)));
+    if (nextRows === rows && nextCols === cols) return render();
+    recordUndo();
     selectionRange = null;
-    rows = Math.max(1, Math.min(MAX_SIZE, Math.floor(Number(newRows) || 1)));
-    cols = Math.max(1, Math.min(MAX_SIZE, Math.floor(Number(newCols) || 1)));
+    rows = nextRows;
+    cols = nextCols;
     seats = Array.from({ length: rows }, (_, r) => Array.from({ length: cols }, (_, c) => seats[r]?.[c] ?? ''));
     render();
   }
@@ -216,41 +199,86 @@
   }
 
   function pasteMatrix(startR, startC, matrix) {
-    const pasteRows = matrix.length;
-    const pasteCols = Math.max(1, ...matrix.map(line => line.length));
-    const targetRows = Math.min(MAX_SIZE, Math.max(rows, startR + pasteRows));
-    const targetCols = Math.min(MAX_SIZE, Math.max(cols, startC + pasteCols));
+    if (!matrix.length) return;
+    recordUndo();
+    const [pRows, pCols] = [matrix.length, Math.max(1, ...matrix.map(l => l.length))];
+    const targetRows = Math.min(MAX_SIZE, Math.max(rows, startR + pRows));
+    const targetCols = Math.min(MAX_SIZE, Math.max(cols, startC + pCols));
 
     if (targetRows !== rows || targetCols !== cols) {
       seats = Array.from({ length: targetRows }, (_, r) => Array.from({ length: targetCols }, (_, c) => seats[r]?.[c] ?? ''));
-      rows = targetRows;
-      cols = targetCols;
+      rows = targetRows; cols = targetCols;
     }
 
-    matrix.forEach((line, r) => {
-      line.forEach((value, c) => {
-        const rr = startR + r, cc = startC + c;
-        if (rr < rows && cc < cols) seats[rr][cc] = cleanText(value);
-      });
-    });
+    matrix.forEach((line, r) => line.forEach((val, c) => {
+      if (startR + r < rows && startC + c < cols) seats[startR + r][startC + c] = cleanText(val);
+    }));
 
     selectionRange = null;
     render();
-    focusCell(Math.min(rows - 1, startR + pasteRows - 1), Math.min(cols - 1, startC + pasteCols - 1));
-    showToast(`已粘贴 ${pasteRows} 行 × ${pasteCols} 列`);
+    focusCell(Math.min(rows - 1, startR + pRows - 1), Math.min(cols - 1, startC + pCols - 1));
+    showToast(`已粘贴 ${pRows} 行 × ${pCols} 列`);
   }
 
-  table.addEventListener('focusin', event => {
-    const editor = event.target.closest('.seat');
+  function paintSelection() {
+    table.querySelectorAll('.seat').forEach(cell => {
+      cell.classList.toggle('range-selected', isInSelection(Number(cell.dataset.r), Number(cell.dataset.c)));
+    });
+  }
+
+  const getSelectedTextContent = () => {
+    if (!selectionRange) {
+      const active = document.activeElement?.closest?.('.seat');
+      return active ? (seats[Number(active.dataset.r)]?.[Number(active.dataset.c)] ?? '') : '';
+    }
+    return Array.from({ length: selectionRange.bottom - selectionRange.top + 1 }, (_, i) => {
+      const r = selectionRange.top + i;
+      return Array.from({ length: selectionRange.right - selectionRange.left + 1 }, (_, j) => seats[r]?.[selectionRange.left + j] ?? '').join('\t');
+    }).join('\n');
+  };
+
+  const getSelectedHtmlContent = () => {
+    const range = selectionRange || { top: lastFocusedCell.r, bottom: lastFocusedCell.r, left: lastFocusedCell.c, right: lastFocusedCell.c };
+    let html = '<table><tbody>';
+    for (let r = range.top; r <= range.bottom; r++) {
+      html += '<tr>';
+      for (let c = range.left; c <= range.right; c++) html += `<td>${escapeHtml(seats[r]?.[c] ?? '')}</td>`;
+      html += '</tr>';
+    }
+    return html + '</tbody></table>';
+  };
+
+  // 事件监听绑定
+  table.addEventListener('focusin', e => {
+    const editor = e.target.closest('.seat');
     if (editor) lastFocusedCell = { r: Number(editor.dataset.r), c: Number(editor.dataset.c) };
   });
 
-  table.addEventListener('input', event => {
+  table.addEventListener('compositionstart', e => {
+    if (!arrangeMode && e.target.closest('.seat')) { isComposingSeat = true; compositionUndoPending = true; recordUndo(); }
+  });
+  table.addEventListener('compositionend', () => isComposingSeat = false);
+  
+  table.addEventListener('beforeinput', e => {
+    if (arrangeMode || isComposingSeat || e.isComposing || e.inputType === 'historyUndo' || e.inputType === 'historyRedo' || compositionUndoPending) return;
+    if (e.target.closest('.seat')) recordUndo();
+  }, true);
+
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault(); e.stopPropagation(); undo();
+    }
+  }, true);
+
+  undoBtn.addEventListener('click', undo);
+
+  table.addEventListener('input', e => {
     if (arrangeMode) return;
-    const editor = event.target.closest('.seat');
+    const editor = e.target.closest('.seat');
     if (!editor) return;
-    const r = Number(editor.dataset.r), c = Number(editor.dataset.c);
+    const [r, c] = [Number(editor.dataset.r), Number(editor.dataset.c)];
     seats[r][c] = cleanText(editor.textContent);
+    if (compositionUndoPending && !isComposingSeat) compositionUndoPending = false;
     editor.classList.toggle('has-text', Boolean(seats[r][c]));
     lastFocusedCell = { r, c };
     if (selectionRange) { selectionRange = null; paintSelection(); }
@@ -260,132 +288,93 @@
   rowsInput.addEventListener('change', () => resizeGrid(rowsInput.value, cols));
   colsInput.addEventListener('change', () => resizeGrid(rows, colsInput.value));
 
-  document.addEventListener('paste', event => {
+  document.addEventListener('paste', e => {
     if (arrangeMode) return;
     const active = document.activeElement?.closest?.('.seat');
-    const clipboard = event.clipboardData;
+    const clipboard = e.clipboardData;
     if ((!active && !selectionRange) || !clipboard) return;
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    e.preventDefault(); e.stopImmediatePropagation();
 
     let matrix = [];
     const htmlText = clipboard.getData('text/html');
-    if (htmlText && htmlText.includes('<table')) {
+    if (htmlText?.includes('<table')) {
       try {
-        const doc = new DOMParser().parseFromString(htmlText, 'text/html');
-        doc.querySelectorAll('tr').forEach(tr => {
-          const rowData = [];
-          tr.querySelectorAll('td, th').forEach(cell => rowData.push(cell.textContent.trim()));
-          if (rowData.length > 0) matrix.push(rowData);
+        new DOMParser().parseFromString(htmlText, 'text/html').querySelectorAll('tr').forEach(tr => {
+          const rowData = Array.from(tr.querySelectorAll('td, th'), c => c.textContent.trim());
+          if (rowData.length) matrix.push(rowData);
         });
       } catch (_) {}
     }
 
-    if (matrix.length === 0) {
+    if (!matrix.length) {
       const text = clipboard.getData('text/plain');
       if (text) {
         const lines = text.replace(/\r\n?/g, '\n').split('\n');
         if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
-        matrix = lines.map(line => line.split('\t').map(x => x.trim()));
+        matrix = lines.map(l => l.split('\t').map(x => x.trim()));
       }
     }
-
-    if (matrix.length === 0) return;
+    if (!matrix.length) return;
 
     const { r: startR, c: startC } = getStartCoords();
-
     if (selectionRange && selectedAreaSize() > 1 && matrix.length === 1 && matrix[0].length === 1) {
-      const plainText = matrix[0][0];
-      const range = { ...selectionRange };
+      const val = matrix[0][0], range = { ...selectionRange };
+      recordUndo();
       let count = 0;
       for (let r = range.top; r <= range.bottom; r++) {
         for (let c = range.left; c <= range.right; c++) {
-          if (r < rows && c < cols) { seats[r][c] = plainText; count++; }
+          if (r < rows && c < cols) { seats[r][c] = val; count++; }
         }
       }
       selectionRange = null;
       render();
       focusCell(range.top, range.left);
-      showToast(`已向 ${count} 个座位填入`);
-      return;
+      return showToast(`已向 ${count} 个座位填入`);
     }
-
     pasteMatrix(startR, startC, matrix);
   }, true);
 
-  const getSelectedTextContent = () => {
-    if (selectionRange) {
-      return Array.from({ length: selectionRange.bottom - selectionRange.top + 1 }, (_, i) => {
-        const r = selectionRange.top + i;
-        return Array.from({ length: selectionRange.right - selectionRange.left + 1 }, (_, j) => {
-          const c = selectionRange.left + j;
-          return seats[r]?.[c] ?? '';
-        }).join('\t');
-      }).join('\n');
-    }
-    const active = document.activeElement?.closest?.('.seat');
-    return active ? (seats[Number(active.dataset.r)]?.[Number(active.dataset.c)] ?? '') : '';
-  };
-
-  const getSelectedHtmlContent = () => {
-    const range = selectionRange || { top: lastFocusedCell.r, bottom: lastFocusedCell.r, left: lastFocusedCell.c, right: lastFocusedCell.c };
-    let html = '<table><tbody>';
-    for (let r = range.top; r <= range.bottom; r++) {
-      html += '<tr>';
-      for (let c = range.left; c <= range.right; c++) {
-        html += `<td>${escapeHtml(seats[r]?.[c] ?? '')}</td>`;
-      }
-      html += '</tr>';
-    }
-    return html + '</tbody></table>';
-  };
-
-  document.addEventListener('copy', event => {
+  document.addEventListener('copy', e => {
     if (arrangeMode) return;
     const active = document.activeElement?.closest?.('.seat');
-    if (!selectionRange && (!active || window.getSelection().toString() === '')) return;
-
-    event.preventDefault();
-    event.clipboardData.setData('text/plain', getSelectedTextContent());
-    event.clipboardData.setData('text/html', getSelectedHtmlContent());
+    if (!selectionRange && (!active || !window.getSelection().toString())) return;
+    e.preventDefault();
+    e.clipboardData.setData('text/plain', getSelectedTextContent());
+    e.clipboardData.setData('text/html', getSelectedHtmlContent());
     showToast('已复制所选座位');
   });
 
-  document.addEventListener('cut', event => {
+  document.addEventListener('cut', e => {
     if (arrangeMode) return;
     const active = document.activeElement?.closest?.('.seat');
-    if (!selectionRange && (!active || window.getSelection().toString() === '')) return;
-
-    event.preventDefault();
-    event.clipboardData.setData('text/plain', getSelectedTextContent());
-
+    if (!selectionRange && (!active || !window.getSelection().toString())) return;
+    e.preventDefault();
+    e.clipboardData.setData('text/plain', getSelectedTextContent());
     const range = selectionRange || { top: Number(active.dataset.r), bottom: Number(active.dataset.r), left: Number(active.dataset.c), right: Number(active.dataset.c) };
-    for (let r = range.top; r <= range.bottom; r++) {
-      for (let c = range.left; c <= range.right; c++) seats[r][c] = '';
-    }
+    recordUndo();
+    for (let r = range.top; r <= range.bottom; r++) for (let c = range.left; c <= range.right; c++) seats[r][c] = '';
     selectionRange = null;
     render();
     focusCell(range.top, range.left);
     showToast('已剪切所选座位');
   });
 
-  table.addEventListener('mousedown', event => {
+  table.addEventListener('mousedown', e => {
     if (arrangeMode) return;
-    const editor = event.target.closest('.seat');
-    if (!editor || event.button !== 0) return;
-    pointerDown = { r: Number(editor.dataset.r), c: Number(editor.dataset.c), x: event.clientX, y: event.clientY };
+    const editor = e.target.closest('.seat');
+    if (!editor || e.button !== 0) return;
+    pointerDown = { r: Number(editor.dataset.r), c: Number(editor.dataset.c), x: e.clientX, y: e.clientY };
     lastFocusedCell = { r: pointerDown.r, c: pointerDown.c };
     dragSelecting = false;
   });
 
-  document.addEventListener('mousemove', event => {
-    if (arrangeMode || !pointerDown || !(event.buttons & 1)) return;
-    if (!dragSelecting && Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) < 4) return;
+  document.addEventListener('mousemove', e => {
+    if (arrangeMode || !pointerDown || !(e.buttons & 1)) return;
+    if (!dragSelecting && Math.hypot(e.clientX - pointerDown.x, e.clientY - pointerDown.y) < 4) return;
     dragSelecting = true;
     document.body.classList.add('dragging-seats');
-    event.preventDefault();
-    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.seat');
+    e.preventDefault();
+    const target = document.elementFromPoint(e.clientX, e.clientY)?.closest('.seat');
     if (!target || !table.contains(target)) return;
     window.getSelection()?.removeAllRanges();
     selectionRange = normalizeRange(pointerDown, { r: Number(target.dataset.r), c: Number(target.dataset.c) });
@@ -396,59 +385,55 @@
     if (arrangeMode || !pointerDown) return;
     document.body.classList.remove('dragging-seats');
     if (!dragSelecting) { selectionRange = null; paintSelection(); }
-    pointerDown = null;
-    dragSelecting = false;
+    pointerDown = null; dragSelecting = false;
   });
 
-  table.addEventListener('keydown', event => {
+  table.addEventListener('keydown', e => {
     if (arrangeMode) return;
-    const editor = event.target.closest('.seat');
+    const editor = e.target.closest('.seat');
     if (!editor) return;
-    const r = Number(editor.dataset.r), c = Number(editor.dataset.c);
+    const [r, c] = [Number(editor.dataset.r), Number(editor.dataset.c)];
     
-    if (selectionRange && selectedAreaSize() > 1 && ['Delete', 'Backspace'].includes(event.key)) {
-      event.preventDefault();
+    if (selectionRange && selectedAreaSize() > 1 && ['Delete', 'Backspace'].includes(e.key)) {
+      e.preventDefault();
+      recordUndo();
       for (let rr = selectionRange.top; rr <= selectionRange.bottom; rr++) {
         for (let cc = selectionRange.left; cc <= selectionRange.right; cc++) seats[rr][cc] = '';
       }
-      const top = selectionRange.top, left = selectionRange.left;
+      const [top, left] = [selectionRange.top, selectionRange.left];
       selectionRange = null;
       render();
       focusCell(top, left);
-      showToast('已清空所选座位');
-      return;
+      return showToast('已清空所选座位');
     }
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      focusCell(Math.min(rows - 1, r + 1), c);
-    } else if (event.key === 'Tab') {
-      event.preventDefault();
-      const next = Math.max(0, Math.min(rows * cols - 1, event.shiftKey ? (r * cols + c - 1) : (r * cols + c + 1)));
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault(); focusCell(Math.min(rows - 1, r + 1), c);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      const next = Math.max(0, Math.min(rows * cols - 1, e.shiftKey ? (r * cols + c - 1) : (r * cols + c + 1)));
       focusCell(Math.floor(next / cols), next % cols);
     }
   });
 
   arrangeBtn.addEventListener('click', () => {
     arrangeMode = !arrangeMode;
-    selectionRange = null;
-    pointerDown = null;
-    dragSelecting = false;
+    selectionRange = pointerDown = dragSelecting = null;
     document.body.classList.remove('dragging-seats', 'dragging-arrangement');
     customMenu.classList.remove('show');
     render();
     showToast(arrangeMode ? '已进入调整模式：拖动学生交换位置，点 × 可移至待分配区' : '已完成座位调整');
   });
 
-  table.addEventListener('click', event => {
-    const removeButton = event.target.closest('.remove-seat');
-    if (!removeButton || !arrangeMode) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const editor = removeButton.closest('.seat');
+  table.addEventListener('click', e => {
+    const btn = e.target.closest('.remove-seat');
+    if (!btn || !arrangeMode) return;
+    e.preventDefault(); e.stopPropagation();
+    const editor = btn.closest('.seat');
     if (!editor) return;
-    const r = Number(editor.dataset.r), c = Number(editor.dataset.c);
+    const [r, c] = [Number(editor.dataset.r), Number(editor.dataset.c)];
     const name = seats[r]?.[c] ?? '';
     if (!name) return;
+    recordUndo();
     seats[r][c] = '';
     unassigned.push(name);
     selectionRange = null;
@@ -456,29 +441,28 @@
     showToast(`${name} 已移至待分配区`);
   });
 
-  function beginArrangeDrag(event, source, element) {
-    if (!arrangeMode || !element || (event.button !== undefined && event.button !== 0)) return;
-    event.preventDefault();
-    arrangeDrag = { source, element, startX: event.clientX, startY: event.clientY, started: false, target: null };
-  }
+  const beginArrangeDrag = (e, source, el) => {
+    if (!arrangeMode || !el || (e.button !== undefined && e.button !== 0)) return;
+    e.preventDefault();
+    arrangeDrag = { source, element: el, startX: e.clientX, startY: e.clientY, started: false, target: null };
+  };
 
-  table.addEventListener('pointerdown', event => {
-    if (!arrangeMode || event.target.closest('.remove-seat')) return;
-    const editor = event.target.closest('.seat');
+  table.addEventListener('pointerdown', e => {
+    if (!arrangeMode || e.target.closest('.remove-seat')) return;
+    const editor = e.target.closest('.seat');
     if (editor && table.contains(editor) && seats[editor.dataset.r]?.[editor.dataset.c]) {
-      beginArrangeDrag(event, { type: 'seat', r: Number(editor.dataset.r), c: Number(editor.dataset.c) }, editor);
+      beginArrangeDrag(e, { type: 'seat', r: Number(editor.dataset.r), c: Number(editor.dataset.c) }, editor);
     }
   });
 
-  waitingList.addEventListener('pointerdown', event => {
+  waitingList.addEventListener('pointerdown', e => {
     if (!arrangeMode) return;
-    const item = event.target.closest('.waiting-item');
+    const item = e.target.closest('.waiting-item');
     if (item && waitingList.contains(item)) {
-      beginArrangeDrag(event, { type: 'waiting', index: Number(item.dataset.index) }, item);
+      beginArrangeDrag(e, { type: 'waiting', index: Number(item.dataset.index) }, item);
     }
   });
 
-  // 合并后的拖拽清理与提交函数
   function cleanArrangeDrag(commit = false) {
     document.body.classList.remove('dragging-arrangement');
     table.querySelectorAll('.dragging-seat, .drop-target').forEach(el => el.classList.remove('dragging-seat', 'drop-target'));
@@ -492,27 +476,26 @@
     }
   }
 
-  document.addEventListener('pointermove', event => {
+  document.addEventListener('pointermove', e => {
     if (!arrangeDrag || !arrangeMode) return;
-    if (!arrangeDrag.started && Math.hypot(event.clientX - arrangeDrag.startX, event.clientY - arrangeDrag.startY) < 6) return;
+    if (!arrangeDrag.started && Math.hypot(e.clientX - arrangeDrag.startX, e.clientY - arrangeDrag.startY) < 6) return;
     if (!arrangeDrag.started) {
       arrangeDrag.started = true;
       document.body.classList.add('dragging-arrangement');
       arrangeDrag.element.classList.add('dragging-seat');
     }
-    event.preventDefault();
+    e.preventDefault();
     
-    // 清除原有高亮
     table.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
     waitingPanel.classList.remove('drop-target');
     arrangeDrag.target = null;
 
-    const underPointer = document.elementFromPoint(event.clientX, event.clientY);
-    const targetSeat = underPointer?.closest?.('.seat');
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    const targetSeat = under?.closest?.('.seat');
     if (targetSeat && table.contains(targetSeat)) {
       targetSeat.classList.add('drop-target');
       arrangeDrag.target = { type: 'seat', r: Number(targetSeat.dataset.r), c: Number(targetSeat.dataset.c) };
-    } else if (arrangeDrag.source.type === 'seat' && underPointer && waitingPanel.contains(underPointer)) {
+    } else if (arrangeDrag.source.type === 'seat' && under && waitingPanel.contains(under)) {
       waitingPanel.classList.add('drop-target');
       arrangeDrag.target = { type: 'waiting' };
     }
@@ -524,61 +507,54 @@
   function performArrangeDrop(source, target) {
     selectionRange = null;
     if (source.type === 'seat') {
-      const sourceName = seats[source.r]?.[source.c] ?? '';
-      if (!sourceName) return;
+      const srcName = seats[source.r]?.[source.c] ?? '';
+      if (!srcName) return;
       if (target.type === 'waiting') {
+        recordUndo();
         seats[source.r][source.c] = '';
-        unassigned.push(sourceName);
+        unassigned.push(srcName);
         render();
-        showToast(`${sourceName} 已移至待分配区`);
-        return;
+        return showToast(`${srcName} 已移至待分配区`);
       }
       if (target.type === 'seat' && (source.r !== target.r || source.c !== target.c)) {
-        const targetName = seats[target.r]?.[target.c] ?? '';
-        seats[source.r][source.c] = targetName;
-        seats[target.r][target.c] = sourceName;
+        const tgtName = seats[target.r]?.[target.c] ?? '';
+        recordUndo();
+        [seats[source.r][source.c], seats[target.r][target.c]] = [tgtName, srcName];
         render();
-        showToast(targetName ? '已交换两名学生的座位' : '已移动到空座位');
-        return;
+        return showToast(tgtName ? '已交换两名学生的座位' : '已移动到空座位');
       }
     }
 
     if (source.type === 'waiting' && target.type === 'seat') {
-      const sourceName = unassigned[source.index];
-      if (sourceName === undefined) return;
-      const displacedName = seats[target.r]?.[target.c] ?? '';
-      seats[target.r][target.c] = sourceName;
+      const srcName = unassigned[source.index];
+      if (srcName === undefined) return;
+      const displaced = seats[target.r]?.[target.c] ?? '';
+      recordUndo();
+      seats[target.r][target.c] = srcName;
       unassigned.splice(source.index, 1);
-      if (displacedName) unassigned.push(displacedName);
+      if (displaced) unassigned.push(displaced);
       render();
-      showToast(displacedName ? '已安排学生，原座位学生移至待分配区' : '已安排学生到座位');
+      showToast(displaced ? '已安排学生，原座位学生移至待分配区' : '已安排学生到座位');
     }
   }
 
-  document.getElementById('rotateBtn').addEventListener('click', () => {
-    seats.reverse();
-    seats.forEach(row => row.reverse());
+  get('rotateBtn').addEventListener('click', () => {
+    recordUndo();
+    seats.reverse().forEach(row => row.reverse());
     selectionRange = null;
     studentView = !studentView;
     render();
   });
 
-  // 自定义右键菜单逻辑
-  table.addEventListener('contextmenu', event => {
-    if (arrangeMode) { event.preventDefault(); return; }
-    const editor = event.target.closest('.seat');
+  table.addEventListener('contextmenu', e => {
+    if (arrangeMode) return e.preventDefault();
+    const editor = e.target.closest('.seat');
     if (!editor) return;
-
-    event.preventDefault();
-    const r = Number(editor.dataset.r), c = Number(editor.dataset.c);
-    if (!isInSelection(r, c)) {
-      selectionRange = null;
-      paintSelection();
-      focusCell(r, c);
-    }
-
-    customMenu.style.top = `${Math.min(event.clientY, window.innerHeight - 150)}px`;
-    customMenu.style.left = `${Math.min(event.clientX, window.innerWidth - 150)}px`;
+    e.preventDefault();
+    const [r, c] = [Number(editor.dataset.r), Number(editor.dataset.c)];
+    if (!isInSelection(r, c)) { selectionRange = null; paintSelection(); focusCell(r, c); }
+    customMenu.style.top = `${Math.min(e.clientY, window.innerHeight - 150)}px`;
+    customMenu.style.left = `${Math.min(e.clientX, window.innerWidth - 150)}px`;
     customMenu.classList.add('show');
   });
 
@@ -587,27 +563,19 @@
   menuCopy.addEventListener('click', async () => {
     customMenu.classList.remove('show');
     try {
-      await navigator.clipboard.write([new ClipboardItem({
-        'text/plain': new Blob([getSelectedTextContent()], { type: 'text/plain' }),
-        'text/html': new Blob([getSelectedHtmlContent()], { type: 'text/html' })
-      })]);
-      showToast('已复制所选座位');
+      await navigator.clipboard.write([new ClipboardItem({ 'text/plain': new Blob([getSelectedTextContent()], { type: 'text/plain' }), 'text/html': new Blob([getSelectedHtmlContent()], { type: 'text/html' }) })]);
     } catch (_) {
-      try {
-        await navigator.clipboard.writeText(getSelectedTextContent());
-        showToast('已复制所选座位');
-      } catch (err) { showToast('复制失败'); }
+      await navigator.clipboard.writeText(getSelectedTextContent());
     }
+    showToast('已复制所选座位');
   });
 
   menuCut.addEventListener('click', async () => {
     customMenu.classList.remove('show');
     try { await navigator.clipboard.writeText(getSelectedTextContent()); } catch (_) {}
-
     const range = selectionRange || { top: lastFocusedCell.r, bottom: lastFocusedCell.r, left: lastFocusedCell.c, right: lastFocusedCell.c };
-    for (let rr = range.top; rr <= range.bottom; rr++) {
-      for (let cc = range.left; cc <= range.right; cc++) seats[rr][cc] = '';
-    }
+    recordUndo();
+    for (let r = range.top; r <= range.bottom; r++) for (let c = range.left; c <= range.right; c++) seats[r][c] = '';
     selectionRange = null;
     render();
     focusCell(range.top, range.left);
@@ -621,12 +589,10 @@
       if (!text) return;
       const lines = text.replace(/\r\n?/g, '\n').split('\n');
       if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
-      const matrix = lines.map(line => line.split('\t').map(x => x.trim()));
+      const matrix = lines.map(l => l.split('\t').map(x => x.trim()));
       const { r: startR, c: startC } = getStartCoords();
       pasteMatrix(startR, startC, matrix);
-    } catch (err) {
-      showToast('粘贴失败，请使用 Ctrl+V');
-    }
+    } catch (_) { showToast('粘贴失败，请使用 Ctrl+V'); }
   });
 
   loadState();

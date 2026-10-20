@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>班级座位表编辑神器</title>
-<link rel="stylesheet" href="style.css?v=20261016-01">
+<link rel="stylesheet" href="style.css?v=20261020-1">
 <link rel="icon" href="favicon.jpg" type="image/jpeg">
 </head>
 <body>
@@ -24,6 +24,12 @@
       </div>
     </div>
     <div class="toolbar-right">
+      <button class="btn undo-btn" id="undoBtn" type="button" aria-label="撤销" title="撤销（Ctrl+Z）" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M3 7v6h6"></path>
+          <path d="M3 13a9 9 0 1 0 2.64-6.36L3 9"></path>
+        </svg>
+      </button>
       <button class="btn" id="arrangeBtn" type="button" aria-pressed="false">调整座位</button>
       <button class="btn primary" id="rotateBtn" type="button"><span id="rotateLabel">旋转 180°</span></button>
     </div>
@@ -67,6 +73,6 @@
   <div class="menu-item" id="menuCut">剪切</div>
   <div class="menu-item" id="menuPaste">粘贴</div>
 </div>
-<script src="script.js?v=20261016-01"></script>
+<script src="script.js?v=20261020-1"></script>
 </body>
 </html>
