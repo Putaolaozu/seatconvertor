@@ -14,6 +14,14 @@
   const [table, rowsInput, colsInput, viewTitle, rotateLabel, topStage, bottomStage, seatCount, toast, arrangeBtn, undoBtn, waitingPanel, waitingList, waitingCount, waitingHint, customMenu, menuCopy, menuCut, menuPaste] =
     ['seatTable', 'rowsInput', 'colsInput', 'viewTitle', 'rotateLabel', 'topStage', 'bottomStage', 'seatCount', 'toast', 'arrangeBtn', 'undoBtn', 'waitingPanel', 'waitingList', 'waitingCount', 'waitingHint', 'customMenu', 'menuCopy', 'menuCut', 'menuPaste'].map(get);
 
+  // 获取批量导入相关的弹窗及按钮元素
+  const batchAddBtn = get('batchAddBtn');
+  const batchModal = get('batchModal');
+  const batchTextarea = get('batchTextarea');
+  const batchImportBtn = get('batchImportBtn');
+  const batchCloseBtn = get('batchCloseBtn');
+  const clearWaitingBtn = get('clearWaitingBtn');
+
   const cleanText = str => String(str ?? '').replace(/[\r\n]/g, ' ').trim();
   const escapeHtml = str => String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
   const normalizeRange = (a, b) => ({ top: Math.min(a.r, b.r), left: Math.min(a.c, b.c), bottom: Math.max(a.r, b.r), right: Math.max(a.c, b.c) });
@@ -90,7 +98,20 @@
       const item = document.createElement('div');
       item.className = 'waiting-item';
       item.dataset.index = index;
-      item.textContent = name;
+      
+      const label = document.createElement('span');
+      label.className = 'waiting-item-label';
+      label.textContent = name;
+      item.appendChild(label);
+
+      // 单独删除按钮（使用 HTML 中已有的 remove-waiting-item 样式）
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'remove-waiting-item';
+      removeBtn.textContent = '×';
+      removeBtn.title = '删除此名字';
+      item.appendChild(removeBtn);
+
       waitingList.appendChild(item);
     });
   }
@@ -152,7 +173,7 @@
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'remove-seat';
-            btn.textContent = '×';
+            btn.textContent = '—';
             btn.title = '移至待分配区';
             editor.appendChild(btn);
           }
@@ -247,6 +268,81 @@
     }
     return html + '</tbody></table>';
   };
+
+  // 批量导入弹窗相关事件绑定
+  batchAddBtn.addEventListener('click', () => {
+    batchTextarea.value = '';
+    batchModal.hidden = false;
+    batchTextarea.focus();
+  });
+
+  batchCloseBtn.addEventListener('click', () => {
+    batchModal.hidden = true;
+  });
+
+  batchImportBtn.addEventListener('click', () => {
+    const text = batchTextarea.value;
+    if (!text.trim()) return showToast('请输入或粘贴名单');
+    const names = text.replace(/\r\n?/g, '\n').split('\n').map(cleanText).filter(Boolean);
+    if (names.length === 0) return showToast('没有检测到有效姓名');
+    
+    recordUndo();
+    unassigned.push(...names);
+    batchModal.hidden = true;
+    render();
+    showToast(`成功导入 ${names.length} 人到待分配区`);
+  });
+
+  // 待分配区：清空按钮
+clearWaitingBtn.addEventListener('click', () => {
+    if (unassigned.length === 0) return showToast('待分配区已经是空的');
+
+    // 1. 动态创建美观的遮罩层和弹窗
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-content" style="max-width: 380px; text-align: center; gap: 18px;">
+        <h3 style="margin-bottom: -4px;">清空确认</h3>
+        <p>确定要清空待分配区的所有学生吗？此操作可按 Ctrl+Z 撤销。</p>
+        <div class="modal-actions" style="justify-content: center;">
+          <button class="btn primary" id="confirmClearBtn" type="button" style="background: #e34b4b; border-color: #e34b4b;">确定清空</button>
+          <button class="btn" id="cancelClearBtn" type="button">取消</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // 2. 绑定按钮事件
+    const closeOverlay = () => overlay.remove();
+
+    overlay.querySelector('#cancelClearBtn').addEventListener('click', closeOverlay);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeOverlay(); // 点击遮罩空白处也可以关闭
+    });
+
+    overlay.querySelector('#confirmClearBtn').addEventListener('click', () => {
+      closeOverlay();
+      recordUndo();
+      unassigned = [];
+      render();
+      showToast('已清空待分配区');
+    });
+  });
+
+  // 待分配区：单独删除名字按钮
+  waitingList.addEventListener('click', e => {
+    const removeBtn = e.target.closest('.remove-waiting-item');
+    if (!removeBtn) return;
+    const item = removeBtn.closest('.waiting-item');
+    if (!item) return;
+    const index = Number(item.dataset.index);
+    if (isNaN(index)) return;
+    
+    recordUndo();
+    const removedName = unassigned.splice(index, 1)[0];
+    render();
+    showToast(`已移除：${removedName}`);
+  });
 
   // 事件监听绑定
   table.addEventListener('focusin', e => {
@@ -443,6 +539,8 @@
 
   const beginArrangeDrag = (e, source, el) => {
     if (!arrangeMode || !el || (e.button !== undefined && e.button !== 0)) return;
+    // 如果点击的是待分配项里的删除按钮，不触发拖拽
+    if (e.target.closest('.remove-waiting-item')) return;
     e.preventDefault();
     arrangeDrag = { source, element: el, startX: e.clientX, startY: e.clientY, started: false, target: null };
   };

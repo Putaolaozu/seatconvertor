@@ -77,7 +77,7 @@ h2 {font-size: medium;}
 .dimension-control input { width: 40px; border: 0; outline: 0; background: transparent; color: var(--ink); text-align: center; font-weight: 700; font-size: 16px; }
 .dimension-control .x { color: #a3a69d; }
 
-/* =================2=========================
+/* ==========================================
    3. 状态栏与座位表格区
    ========================================== */
 .statusline { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
@@ -126,10 +126,10 @@ td { padding: 0; height: 54px; vertical-align: stretch; }
 .remove-seat {
   position: absolute; top: 2px; right: 2px; z-index: 2; display: inline-flex;
   align-items: center; justify-content: center; width: 19px; height: 19px; padding: 0;
-  border: 0; border-radius: 50%; background: #e34b4b; color: #fff; font-size: 17px;
-  font-weight: 700; line-height: 1; cursor: pointer; box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
+  border: 0; border-radius: 50%; background: #4faaf5; color: #faf9f8; font-size: 16px; 
+  font-weight: 900; line-height: 1; cursor: pointer; box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
 }
-.remove-seat:hover { background: #c92f2f; }
+.remove-seat:hover { background: #249cff; color: #ffd1a5; }
 
 .arranging-seats .seat.dragging-seat, .waiting-item.dragging-seat { opacity: .45; transform: scale(.96); animation: none; }
 .arranging-seats .seat.drop-target { border: 2px dashed var(--accent); background: #eef7e9; box-shadow: 0 0 0 3px rgba(60, 155, 32, .13); animation: none; }
@@ -153,7 +153,13 @@ body.dragging-arrangement, body.dragging-arrangement * {
 .waiting-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .waiting-header h2 { margin: 0; color: var(--ink); font-size: 18px; }
 .waiting-header p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+.waiting-header-right { display: flex; align-items: center; gap: 12px; }
 .waiting-count { color: var(--muted); font-size: 14px; }
+.clear-waiting-btn {
+  height: 32px; padding: 0 10px; font-size: 13px; border-radius: 6px;
+  color: #e34b4b; border-color: #f3b8b8; background: #fdf2f2;
+}
+.clear-waiting-btn:hover { background: #fae1e1; border-color: #e89898; color: #c92f2f; }
 
 .waiting-list {
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
@@ -165,10 +171,18 @@ body.dragging-arrangement, body.dragging-arrangement * {
 
 .waiting-item {
   position: relative; display: inline-flex; align-items: center; justify-content: center;
-  min-height: 40px; max-width: 100%; padding: 7px 13px; border: 1px solid var(--line-strong);
+  min-height: 40px; max-width: 100%; padding: 7px 24px 7px 13px; border: 1px solid var(--line-strong);
   border-radius: 9px; background: #fff; color: var(--ink); font-size: 16px;
   overflow-wrap: anywhere; cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none;
 }
+.waiting-item-label { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.remove-waiting-item {
+  position: absolute; top: 2px; right: 2px; z-index: 2; display: inline-flex;
+  align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0;
+  border: 0; border-radius: 50%; background: #e34b4b; color: #fff; font-size: 16px;
+  font-weight: 700; line-height: 1; cursor: pointer; box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
+}
+.remove-waiting-item:hover { background: #c92f2f; }
 .waiting-empty { width: 100%; padding: 2px 0; color: #92968d; text-align: center; font-size: 14px; }
 
 /* ==========================================
@@ -197,10 +211,9 @@ body.dragging-arrangement, body.dragging-arrangement * {
 .cute-tip {
   display: inline-block;
   animation: cute-jump 4s infinite ease-in-out;
-  transform-origin: bottom center; /* 以底部为支点，更有弹跳感果 */
+  transform-origin: bottom center;
 }
 
-/* 动效核心：前 70% 的时间静止，后 30% 的时间连续跳动两下 */
 @keyframes cute-jump {
   0%, 70%, 100% {
     transform: translateY(0) scale(1);
@@ -234,7 +247,7 @@ body.dragging-arrangement, body.dragging-arrangement * {
 @media print {
   body { background: #fff; }
   .page { max-width: none; padding: 0; }
-  .toolbar, .table-footer, h1, h2 { display: none; }
+  .toolbar, .table-footer, .waiting-panel, h1, h2 { display: none; }
   .board { box-shadow: none; }
   .seat { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
@@ -273,4 +286,31 @@ body.dragging-arrangement, body.dragging-arrangement * {
 }
 @media (max-width: 700px) {
   .toolbar-right #undoBtn { flex: 0 0 46px; }
+}
+
+/* ==========================================
+   8. 批量管理弹窗样式
+   ========================================== */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+  padding: 20px;
+}
+.modal-overlay[hidden] { display: none !important; }
+.modal-content {
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: 14px; padding: 24px; width: 100%; max-width: 500px;
+  box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px;
+}
+.modal-content h3 { margin: 0; font-size: 20px; font-weight: 700; }
+.modal-content p { margin: 0; color: var(--muted); font-size: 14px; }
+.modal-content textarea {
+  width: 100%; border: 1px solid var(--line-strong); border-radius: 8px;
+  padding: 12px; font: inherit; font-size: 15px; outline: none; resize: vertical;
+  background: #fdfdfc; color: var(--ink);
+}
+.modal-content textarea::placeholder { color: #a3a69d; }
+.modal-content textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15); }
+.modal-actions {
+  display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 4px;
 }
