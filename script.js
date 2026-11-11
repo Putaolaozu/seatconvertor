@@ -128,6 +128,8 @@
     topStage.hidden = !studentView;
     bottomStage.hidden = studentView;
     seatCount.textContent = `${rows} 行 × ${cols} 列 · 共 ${rows * cols} 座位`;
+    // 动态计算表格最小宽度：每列大约分配 75px，保证列多时出现横向滚动条而不至于挤压
+    table.style.minWidth = `${Math.max(850, cols * 78)}px`;
 
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
@@ -386,7 +388,7 @@ clearWaitingBtn.addEventListener('click', () => {
 
   document.addEventListener('paste', e => {
     if (arrangeMode) return;
-    const active = document.activeElement?.closest?.('.seat');
+    const active = document.activeElement?.closest?.('.seat') || table.querySelector(`.seat[data-r="${lastFocusedCell.r}"][data-c="${lastFocusedCell.c}"]`);
     const clipboard = e.clipboardData;
     if ((!active && !selectionRange) || !clipboard) return;
     e.preventDefault(); e.stopImmediatePropagation();
@@ -432,8 +434,8 @@ clearWaitingBtn.addEventListener('click', () => {
 
   document.addEventListener('copy', e => {
     if (arrangeMode) return;
-    const active = document.activeElement?.closest?.('.seat');
-    if (!selectionRange && (!active || !window.getSelection().toString())) return;
+    const active = document.activeElement?.closest?.('.seat') || table.querySelector(`.seat[data-r="${lastFocusedCell.r}"][data-c="${lastFocusedCell.c}"]`);
+    if (!selectionRange && !active) return;
     e.preventDefault();
     e.clipboardData.setData('text/plain', getSelectedTextContent());
     e.clipboardData.setData('text/html', getSelectedHtmlContent());
@@ -442,8 +444,8 @@ clearWaitingBtn.addEventListener('click', () => {
 
   document.addEventListener('cut', e => {
     if (arrangeMode) return;
-    const active = document.activeElement?.closest?.('.seat');
-    if (!selectionRange && (!active || !window.getSelection().toString())) return;
+    const active = document.activeElement?.closest?.('.seat') || table.querySelector(`.seat[data-r="${lastFocusedCell.r}"][data-c="${lastFocusedCell.c}"]`);
+    if (!selectionRange && !active) return;
     e.preventDefault();
     e.clipboardData.setData('text/plain', getSelectedTextContent());
     const range = selectionRange || { top: Number(active.dataset.r), bottom: Number(active.dataset.r), left: Number(active.dataset.c), right: Number(active.dataset.c) };
