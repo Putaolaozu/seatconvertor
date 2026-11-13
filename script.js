@@ -13,8 +13,8 @@
   let lastFocusedCell = { r: 0, c: 0 };
 
   const get = id => document.getElementById(id);
-  const [table, rowsInput, colsInput, viewTitle, rotateLabel, topStageArea, bottomStageArea, seatCount, toast, arrangeBtn, undoBtn, waitingPanel, waitingList, waitingCount, waitingHint, customMenu, menuCopy, menuCut, menuPaste, leftAddTop, rightAddTop, leftAddBottom, rightAddBottom, leftExtraTop, rightExtraTop, leftExtraBottom, rightExtraBottom] =
-    ['seatTable', 'rowsInput', 'colsInput', 'viewTitle', 'rotateLabel', 'topStageArea', 'bottomStageArea', 'seatCount', 'toast', 'arrangeBtn', 'undoBtn', 'waitingPanel', 'waitingList', 'waitingCount', 'waitingHint', 'customMenu', 'menuCopy', 'menuCut', 'menuPaste', 'leftAddTop', 'rightAddTop', 'leftAddBottom', 'rightAddBottom', 'leftExtraTop', 'rightExtraTop', 'leftExtraBottom', 'rightExtraBottom'].map(get);
+  const [table, rowsInput, colsInput, viewTitle, rotateLabel, topStageArea, bottomStageArea, seatCount, toast, arrangeBtn, undoBtn, waitingPanel, waitingList, waitingCount, waitingHint, customMenu, menuCopy, menuCut, menuPaste, leftExtraTop, rightExtraTop, leftExtraBottom, rightExtraBottom] =
+    ['seatTable', 'rowsInput', 'colsInput', 'viewTitle', 'rotateLabel', 'topStageArea', 'bottomStageArea', 'seatCount', 'toast', 'arrangeBtn', 'undoBtn', 'waitingPanel', 'waitingList', 'waitingCount', 'waitingHint', 'customMenu', 'menuCopy', 'menuCut', 'menuPaste', 'leftExtraTop', 'rightExtraTop', 'leftExtraBottom', 'rightExtraBottom'].map(get);
   // 获取批量导入相关的弹窗及按钮元素
   const batchAddBtn = get('batchAddBtn');
   const batchModal = get('batchModal');
@@ -26,7 +26,7 @@
   const confirmClearBtn = get('confirmClearBtn');
   const cancelClearBtn = get('cancelClearBtn');
 
-  // 克隆模板按钮的辅助函数
+  // 按钮模板与座位编辑框
   const createRemoveSeatBtn = () => get('tplRemoveSeatBtn').content.firstElementChild.cloneNode(true);
   const createCrossBtn = (className, title) => {
     const btn = get('tplCrossBtn').content.firstElementChild.cloneNode(true);
@@ -34,6 +34,26 @@
     btn.title = title;
     return btn;
   };
+
+  function createSeatEditor(name, dataset = {}, selected = false) {
+    const editor = document.createElement('div');
+    editor.className = `seat${name ? ' has-text' : ''}${selected ? ' range-selected' : ''}`;
+    editor.spellcheck = false;
+    Object.assign(editor.dataset, dataset);
+
+    if (arrangeMode) {
+      editor.contentEditable = 'false';
+      const label = document.createElement('span');
+      label.className = 'seat-label';
+      label.textContent = name;
+      editor.appendChild(label);
+      if (name) editor.appendChild(createRemoveSeatBtn());
+    } else {
+      editor.contentEditable = 'true';
+      editor.textContent = name;
+    }
+    return editor;
+  }
 
   const cleanText = str => String(str ?? '').replace(/[\r\n]/g, ' ').trim();
   const escapeHtml = str => String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
@@ -169,34 +189,14 @@
           tr.appendChild(tdAis);
         }
         const td = document.createElement('td');
-        const editor = document.createElement('div');
-        editor.className = `seat${seats[r][c] ? ' has-text' : ''}${isInSelection(r, c) ? ' range-selected' : ''}`;
-        editor.spellcheck = false;
-        editor.dataset.r = r;
-        editor.dataset.c = c;
-
-        if (arrangeMode) {
-          editor.contentEditable = 'false';
-          const label = document.createElement('span');
-          label.className = 'seat-label';
-          label.textContent = seats[r][c];
-          editor.appendChild(label);
-          if (seats[r][c]) {
-            const btn = createRemoveSeatBtn();
-            editor.appendChild(btn);
-          }
-        } else {
-          editor.contentEditable = 'true';
-          editor.textContent = seats[r][c];
-        }
+        const editor = createSeatEditor(seats[r][c], { r, c }, isInSelection(r, c));
         td.appendChild(editor);
         tr.appendChild(td);
       }
       tbody.appendChild(tr);
     }
     table.replaceChildren(thead, tbody);
-// 渲染讲台两侧特座组的辅助函数
-    // 渲染讲台两侧特座组的辅助函数
+// 渲染讲台两侧特座组
     const renderExtraGroup = (groupEl, list, side) => {
       groupEl.replaceChildren();
       if (list.length === 0) return;
@@ -204,42 +204,12 @@
         const wrapper = document.createElement('div');
         wrapper.className = 'extra-seat-wrapper';
 
-        const editor = document.createElement('div');
-        editor.className = `seat${name ? ' has-text' : ''}`;
-        editor.dataset.side = side;
-        editor.dataset.index = index;
-        editor.spellcheck = false;
-
-        if (arrangeMode) {
-          editor.contentEditable = 'false';
-          const label = document.createElement('span');
-          label.className = 'seat-label';
-          label.textContent = name;
-          editor.appendChild(label);
-
-          // 调整模式下有姓名时，右上角显示蓝色“—”暂存按钮
-          if (name) {
-            const btn = createRemoveSeatBtn();
-            editor.appendChild(btn);
-          }
-        } else {
-          editor.contentEditable = 'true';
-          editor.textContent = name;
-        }
+        const editor = createSeatEditor(name, { side, index });
         wrapper.appendChild(editor);
 
-        // 非调整模式下，如果框内是空白的，右上角出现红色叉号删除框
+        // 空白特座显示删除按钮；点击事件由 board 统一处理
         if (!name && !arrangeMode) {
-          const rmBtn = createCrossBtn('remove-extra-seat', '删除此特座姓名框');
-          rmBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            recordUndo();
-            if (side === 'left') leftExtraSeats.splice(index, 1);
-            else rightExtraSeats.splice(index, 1);
-            render();
-            showToast('已删除特座姓名框');
-          });
-          wrapper.appendChild(rmBtn);
+          wrapper.appendChild(createCrossBtn('remove-extra-seat', '删除此特座姓名框'));
         }
         groupEl.appendChild(wrapper);
       });
@@ -569,41 +539,77 @@
     document.body.classList.remove('dragging-seats', 'dragging-arrangement');
     customMenu.classList.remove('show');
     render();
-    showToast(arrangeMode ? '已进入调整模式：拖动学生交换位置，点 × 可移至待分配区' : '已完成座位调整');
+    showToast(arrangeMode ? '已进入调整模式：拖动学生交换位置，点 “ — ” 可移至待分配区' : '已完成座位调整');
   });
 
   const board = table.closest('.board');
-  board.addEventListener('click', e => {
-    const btn = e.target.closest('.remove-seat');
-    if (!btn || !arrangeMode) return;
-    e.preventDefault(); e.stopPropagation();
-    const editor = btn.closest('.seat');
-    if (!editor) return;
 
-    // 判断是普通网格座位还是讲台旁的特座
-    if (editor.dataset.side) {
-      const side = editor.dataset.side;
-      const index = Number(editor.dataset.index);
-      const list = side === 'left' ? leftExtraSeats : rightExtraSeats;
-      const name = list[index] ?? '';
-      if (!name) return;
-      recordUndo();
-      list[index] = '';
-      unassigned.push(name);
-      selectionRange = null;
-      render();
-      return showToast(`${name} 已移至待分配区`);
+  // 统一读写普通座位和讲台特座
+  function getSeatVal(location) {
+    if (location.type === 'seat') return seats[location.r]?.[location.c] ?? '';
+    if (location.type === 'extra') {
+      const list = location.side === 'left' ? leftExtraSeats : rightExtraSeats;
+      return list[location.index] ?? '';
     }
+    return '';
+  }
 
-    const [r, c] = [Number(editor.dataset.r), Number(editor.dataset.c)];
-    const name = seats[r]?.[c] ?? '';
+  function setSeatVal(location, value) {
+    if (location.type === 'seat') seats[location.r][location.c] = value;
+    if (location.type === 'extra') {
+      const list = location.side === 'left' ? leftExtraSeats : rightExtraSeats;
+      list[location.index] = value;
+    }
+  }
+
+  function moveToWaiting(location) {
+    const name = getSeatVal(location);
     if (!name) return;
     recordUndo();
-    seats[r][c] = '';
+    setSeatVal(location, '');
     unassigned.push(name);
     selectionRange = null;
     render();
     showToast(`${name} 已移至待分配区`);
+  }
+
+  function removeExtraSeat(side, index) {
+    if (arrangeMode) return;
+    const list = side === 'left' ? leftExtraSeats : rightExtraSeats;
+    if (!Number.isInteger(index) || index < 0 || index >= list.length) return;
+    recordUndo();
+    list.splice(index, 1);
+    render();
+    showToast('已删除特座姓名框');
+  }
+
+  board.addEventListener('click', e => {
+    const addButton = e.target.closest('.stage-add-btn');
+    if (addButton) {
+      addExtraSeat(addButton.dataset.side);
+      return;
+    }
+
+    const extraRemoveButton = e.target.closest('.remove-extra-seat');
+    if (extraRemoveButton) {
+      e.preventDefault();
+      e.stopPropagation();
+      const editor = extraRemoveButton.closest('.extra-seat-wrapper')?.querySelector('.seat');
+      if (editor) removeExtraSeat(editor.dataset.side, Number(editor.dataset.index));
+      return;
+    }
+
+    const removeButton = e.target.closest('.remove-seat');
+    if (!removeButton || !arrangeMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const editor = removeButton.closest('.seat');
+    if (!editor) return;
+    const location = editor.dataset.side
+      ? { type: 'extra', side: editor.dataset.side, index: Number(editor.dataset.index) }
+      : { type: 'seat', r: Number(editor.dataset.r), c: Number(editor.dataset.c) };
+    moveToWaiting(location);
   });
 
   const beginArrangeDrag = (e, source, el) => {
@@ -690,18 +696,7 @@
   document.addEventListener('pointercancel', () => cleanArrangeDrag(false));
 
   function performArrangeDrop(source, target) {
-  selectionRange = null;
-
-  // 统一读取和写入不同类型座位的方法
-  const getSeatVal = (loc) => {
-    if (loc.type === 'seat') return seats[loc.r]?.[loc.c] ?? '';
-    if (loc.type === 'extra') return (loc.side === 'left' ? leftExtraSeats : rightExtraSeats)[loc.index] ?? '';
-    return '';
-  };
-  const setSeatVal = (loc, val) => {
-    if (loc.type === 'seat') seats[loc.r][loc.c] = val;
-    if (loc.type === 'extra') (loc.side === 'left' ? leftExtraSeats : rightExtraSeats)[loc.index] = val;
-  };
+    selectionRange = null;
 
   // 1. 起点是桌面上的座位（普通座位 或 讲台特座）
   if (source.type === 'seat' || source.type === 'extra') {
@@ -748,7 +743,11 @@
     showToast(displaced ? '已安排学生，原座位学生移至待分配区' : '已安排学生到座位');
   }
 }
-
+  // 打印座位表
+  get('printBtn').addEventListener('click', () => {
+    window.print();
+  });
+  
   get('rotateBtn').addEventListener('click', () => {
     recordUndo();
     seats.reverse().forEach(row => row.reverse());
@@ -817,10 +816,6 @@
     showToast('已添加讲台旁特座');
   };
 
-  leftAddTop.addEventListener('click', () => addExtraSeat('left'));
-  rightAddTop.addEventListener('click', () => addExtraSeat('right'));
-  leftAddBottom.addEventListener('click', () => addExtraSeat('left'));
-  rightAddBottom.addEventListener('click', () => addExtraSeat('right'));
 
   // 监听特座输入框文字变化（采用局部更新，避免全量 render 导致光标丢失）
   document.addEventListener('input', e => {
@@ -841,16 +836,7 @@
     if (val && existingRm) {
       existingRm.remove();
     } else if (!val && !existingRm && !arrangeMode) {
-      const rmBtn = createCrossBtn('remove-extra-seat', '删除此特座姓名框');
-      rmBtn.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        recordUndo();
-        if (side === 'left') leftExtraSeats.splice(index, 1);
-        else rightExtraSeats.splice(index, 1);
-        render();
-        showToast('已删除特座姓名框');
-      });
-      wrapper.appendChild(rmBtn);
+      wrapper.appendChild(createCrossBtn('remove-extra-seat', '删除此特座姓名框'));
     }
     saveState();
   });

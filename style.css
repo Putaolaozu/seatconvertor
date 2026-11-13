@@ -184,42 +184,6 @@ h2 {font-size: medium;}
   background: #c92f2f;
 }
 
-/* 特座姓名框包装器：尺寸和样式与普通座位完全保持一致 */
-.extra-seat-wrapper {
-  position: relative;
-  width: 95px;
-  height: 46px;
-}
-.extra-seat-wrapper .seat {
-  width: 100%;
-  height: 100%;
-  /* 继承默认的 .seat 边框和背景，不再单独设置红色 */
-}
-
-/* 调整模式下，讲台旁的特座也同步具备抖动、半透明拖拽和绿色放置框效果 */
-.arranging-seats .extra-seat-wrapper .seat {
-  padding: 12px 20px 8px 8px;
-  cursor: grab;
-  touch-action: none;
-  -webkit-user-select: none;
-  user-select: none;
-  transform-origin: 50% 55%;
-}
-.arranging-seats .extra-seat-wrapper .seat.has-text {
-  animation: seat-jiggle .22s infinite alternate ease-in-out;
-}
-.arranging-seats .extra-seat-wrapper .seat.dragging-seat {
-  opacity: .45;
-  transform: scale(.96);
-  animation: none;
-}
-.arranging-seats .extra-seat-wrapper .seat.drop-target {
-  border: 2px dashed var(--accent);
-  background: #eef7e9;
-  box-shadow: 0 0 0 3px rgba(60, 155, 32, .13);
-  animation: none;
-}
-
 .grid-wrap { width: 100%; overflow-x: auto; padding: 6px 20px 24px; text-align: center; }
 table { width: max-content; margin: 0 auto; table-layout: fixed; border-collapse: separate; border-spacing: 8px; }
 thead th { color: #82857d; font-size: 15px; font-weight: 700; padding: 0 0 4px; text-align: center; white-space: nowrap; }
@@ -249,7 +213,7 @@ thead th:not(.aisle-col), td:not(.aisle-col) { min-width: 95px; }
    4. 调整模式 (拖拽与抖动效果)
    ========================================== */
 .arranging-seats .seat {
-  position: relative; overflow: hidden; padding: 12px 20px 8px 8px;
+  position: relative;
   cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; transform-origin: 50% 55%;
 }
 .arranging-seats .seat.has-text { animation: seat-jiggle .22s infinite alternate ease-in-out; }
@@ -330,7 +294,7 @@ body.dragging-arrangement, body.dragging-arrangement * {
 
 .custom-context-menu {
   position: fixed; background: var(--surface); border: 1px solid var(--line-strong);
-  border-radius: 8px; box-shadow: var(--shadow); padding: 6px; z-index: 1000; display: none; min-width: 120px;
+  border-radius: 8px; box-shadow: var(--shadow); padding: 6px; z-index: 1000; display: none; min-width: 80px;
 }
 .custom-context-menu.show { display: block; }
 .menu-item {
@@ -374,6 +338,7 @@ body.dragging-arrangement, body.dragging-arrangement * {
   .toolbar-right .btn { flex: 1; }
   .waiting-panel { padding: 14px 12px; }
   .waiting-header { align-items: flex-start; }
+  .toolbar-right #undoBtn { flex: 0 0 46px; }
 }
 
 @media print {
@@ -475,10 +440,6 @@ body.dragging-arrangement, body.dragging-arrangement * {
   background: var(--accent-soft);
   border-color: #a6cec7;
 }
-@media (max-width: 700px) {
-  .toolbar-right #undoBtn { flex: 0 0 46px; }
-}
-
 /* ==========================================
    8. 批量管理弹窗样式
    ========================================== */
@@ -487,7 +448,6 @@ body.dragging-arrangement, body.dragging-arrangement * {
   display: flex; align-items: center; justify-content: center; z-index: 1000;
   padding: 20px;
 }
-.modal-overlay[hidden] { display: none !important; }
 .modal-content {
   background: var(--surface); border: 1px solid var(--line-strong);
   border-radius: 14px; padding: 24px; width: 100%; max-width: 500px;
