@@ -91,22 +91,22 @@ h2 {font-size: medium;}
 .stage-line { width: min(160px, 20%); height: 1px; background: var(--line-strong); }
 .stage.bottom { border-top: 1px dashed var(--line); }
 
-.grid-wrap { width: 100%; overflow-x: auto; padding: 6px 20px 24px; }
-table { width: max-content; min-width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 8px; }
+.grid-wrap { width: 100%; overflow-x: auto; padding: 6px 20px 24px; text-align: center; }
+table { width: max-content; margin: 0 auto; table-layout: fixed; border-collapse: separate; border-spacing: 8px; }
 thead th { color: #82857d; font-size: 15px; font-weight: 700; padding: 0 0 4px; text-align: center; white-space: nowrap; }
 thead th:first-child { width: 65px; }
 tbody th { color: #8f928a; font-size: 15px; font-weight: 600; text-align: center; white-space: nowrap; }
-td { padding: 0; height: 54px; vertical-align: stretch; }
+td { padding: 0; height: 46px; vertical-align: middle; }
 .aisle-col { width: 28px !important; min-width: 28px !important; }
-thead th:not(.aisle-col), td:not(.aisle-col) {min-width: 75px; }
+thead th:not(.aisle-col), td:not(.aisle-col) { min-width: 95px; }
 
 .seat {
-  width: 100%; height: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 10px;
-  background: #fdfdfc; display: flex; align-items: center; justify-content: center; padding: 4px 6px;
+  width: 100%; height: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 10px;
+  background: #fdfdfc; display: flex; align-items: center; justify-content: center; padding: 4px 8px;
   text-align: center; 
-  word-break: break-all;          /* 允许长名字折行 */
+  word-break: break-all;          
   overflow-wrap: break-word; 
-  white-space: normal;           /* 取消原本的 nowrap，允许换行 */
+  white-space: normal;           
   outline: none; transition: border-color .12s, box-shadow .12s, background .12s; font-size: 17px; font-weight: 500;
   caret-color: var(--accent);
 }
@@ -249,14 +249,18 @@ body.dragging-arrangement, body.dragging-arrangement * {
 }
 
 @media print {
-  /* 1. 设置横向打印并缩小页边距，腾出最大空间 */
   @page {
     size: landscape;
-    margin: 8mm;
+    margin: 10mm;
   }
 
   body { 
     background: #fff; 
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
     -webkit-print-color-adjust: exact; 
     print-color-adjust: exact; 
   }
@@ -266,60 +270,57 @@ body.dragging-arrangement, body.dragging-arrangement * {
     padding: 0; 
     margin: 0;
     width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
   }
 
   /* 2. 隐藏不需要打印的按钮和提示 */
-  .toolbar, .table-footer, .waiting-panel, h1, h2, .tip-right { 
+  .toolbar, .table-footer, .waiting-panel, h1, h2, .tip-right, .statusline, .site-footer { 
     display: none !important; 
   }
 
   .board { 
     box-shadow: none; 
     border: none; 
+    width: 100%;
   }
 
   .grid-wrap {
     overflow: visible !important;
     padding: 0 !important;
     width: 100% !important;
+    text-align: center !important;
   }
 
-  /* 3. 核心：强制表格固定布局，让所有列（不论多少列）自动等分撑满整页宽度 */
   table {
     width: 100% !important;
+    margin: 0 auto !important;
     min-width: 0 !important;
     table-layout: fixed !important; 
-    border-spacing: 2px !important; /* 缩小格子间距 */
+    border-spacing: 6px !important; 
   }
 
-  /* 缩窄行号和过道列 */
   thead th:first-child, tbody th {
     width: 35px !important;
-    font-size: 11px !important;
   }
 
   .aisle-col { 
-    width: 10px !important; 
-    min-width: 10px !important; 
+    width: 12px !important; 
+    min-width: 12px !important; 
   }
 
-  /* 取消屏幕上的最小宽度限制，允许列宽在打印时自由缩小 */
   thead th:not(.aisle-col), td:not(.aisle-col) {
     min-width: 0 !important;
   }
 
-  /* 4. 缩小格子尺寸与字号，确保 19 列及以上也能完美单页打印 */
   .seat {
-    border: 1px solid #555 !important;
+    border: 1px solid #7c7b7b2c !important;
     background: #fff !important;
     box-shadow: none !important;
-    font-size: 10px !important; /* 打印时自适应小字号 */
-    height: 28px !important;
-    padding: 1px !important;
-    word-break: break-all !important;
   }
 
-  /* 防止行被中间切断 */
   tr {
     page-break-inside: avoid;
     break-inside: avoid;
@@ -387,4 +388,40 @@ body.dragging-arrangement, body.dragging-arrangement * {
 .modal-content textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15); }
 .modal-actions {
   display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 4px;
+}
+/* ==========================================
+   9. 网页底部注脚样式
+   ========================================== */
+.site-footer {
+  margin-top: 36px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.site-footer p {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.site-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.site-footer a:hover {
+  color: var(--accent-hover);
+  background: var(--accent-soft);
 }
