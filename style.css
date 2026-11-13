@@ -10,6 +10,7 @@
   --accent-hover: #0f766e;
   --accent-soft: #eaf1ec;
   --shadow: 0 6px 24px rgba(27, 32, 26, .06);
+  --focus: #1e5631;
 }
 
 /* ==========================================
@@ -74,7 +75,7 @@ h2 {font-size: medium;}
   display: flex; gap: 6px; align-items: center; background: #fff;
   border: 1px solid var(--line-strong); border-radius: 10px; padding: 0 12px; height: 44px; color: var(--muted);
 }
-.dimension-control input { width: 40px; border: 0; outline: 0; background: transparent; color: var(--ink); text-align: center; font-weight: 700; font-size: 16px; }
+.dimension-control input { margin-right: -10px; width: 40px; border: 0; outline: 0; background: transparent; color: var(--ink); text-align: center; font-weight: 700; font-size: 16px; }
 .dimension-control .x { color: #a3a69d; }
 
 /* ==========================================
@@ -84,12 +85,140 @@ h2 {font-size: medium;}
 .view-state { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; }
 .state-dot { width: 10px; height: 10px; background: var(--accent); border-radius: 50%; }
 .tips { color: var(--muted); margin-left: 10px; }
-.tip-right {text-align: right;margin-right: 10px; color: var(--emphasized);}
+.tip-right {text-align: right;margin-right: 10px; color: var(--muted);}
 
 .board { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
-.stage { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 18px 24px; color: var(--muted); font-size: 22px; letter-spacing: .12em; font-weight: 700; }
-.stage-line { width: min(160px, 20%); height: 1px; background: var(--line-strong); }
-.stage.bottom { border-top: 1px dashed var(--line); }
+
+.stage-area {
+  width: 100%;
+}
+.stage {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  font-size: 22px;
+  letter-spacing: .12em;
+  font-weight: 700;
+}
+.stage.bottom {
+  border-top: 1px dashed var(--line);
+}
+.stage-center {
+  color: var(--muted);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+/* 紧挨着讲台两侧的特座包裹组 */
+.extra-seats-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 讲台两边的淡色圆形“+”按钮，紧挨特座 */
+.stage-add-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px dashed var(--line-strong);
+  background: rgba(0, 0, 0, 0.015);
+  color: var(--muted);
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.stage-add-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  border-color: var(--accent);
+  border-style: solid;
+}
+
+/* 特座姓名框包装器 */
+.extra-seat-wrapper {
+  position: relative;
+  width: 95px;
+  height: 46px;
+}
+.extra-seat-wrapper .seat {
+  width: 100%;
+  height: 100%;
+}
+.extra-seat-wrapper .seat:focus {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(105, 85, 78, 0.18);
+}
+
+/* 空白姓名框右上角的叉号删除按钮 */
+.remove-extra-seat {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #e34b4b;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.remove-extra-seat:hover {
+  background: #c92f2f;
+}
+
+/* 特座姓名框包装器：尺寸和样式与普通座位完全保持一致 */
+.extra-seat-wrapper {
+  position: relative;
+  width: 95px;
+  height: 46px;
+}
+.extra-seat-wrapper .seat {
+  width: 100%;
+  height: 100%;
+  /* 继承默认的 .seat 边框和背景，不再单独设置红色 */
+}
+
+/* 调整模式下，讲台旁的特座也同步具备抖动、半透明拖拽和绿色放置框效果 */
+.arranging-seats .extra-seat-wrapper .seat {
+  padding: 12px 20px 8px 8px;
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transform-origin: 50% 55%;
+}
+.arranging-seats .extra-seat-wrapper .seat.has-text {
+  animation: seat-jiggle .22s infinite alternate ease-in-out;
+}
+.arranging-seats .extra-seat-wrapper .seat.dragging-seat {
+  opacity: .45;
+  transform: scale(.96);
+  animation: none;
+}
+.arranging-seats .extra-seat-wrapper .seat.drop-target {
+  border: 2px dashed var(--accent);
+  background: #eef7e9;
+  box-shadow: 0 0 0 3px rgba(60, 155, 32, .13);
+  animation: none;
+}
 
 .grid-wrap { width: 100%; overflow-x: auto; padding: 6px 20px 24px; text-align: center; }
 table { width: max-content; margin: 0 auto; table-layout: fixed; border-collapse: separate; border-spacing: 8px; }
@@ -104,16 +233,15 @@ thead th:not(.aisle-col), td:not(.aisle-col) { min-width: 95px; }
   width: 100%; height: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 10px;
   background: #fdfdfc; display: flex; align-items: center; justify-content: center; padding: 4px 8px;
   text-align: center; 
-  word-break: break-all;          
-  overflow-wrap: break-word; 
-  white-space: normal;           
-  outline: none; transition: border-color .12s, box-shadow .12s, background .12s; font-size: 17px; font-weight: 500;
+  writing-mode: horizontal-tb !important; /* 强制水平书写，绝不竖排 */
+  white-space: nowrap;
+  outline: none; transition: border-color .12s, box-shadow .12s, background .12s; font-size: 20px; font-weight: 500;
   caret-color: var(--accent);
 }
 .seat:hover { border-color: #c4c9bf; background: #fff; }
-.seat:focus { border-color: #1e5631; box-shadow: 0 0 0 3px rgba(30, 86, 49, 0.15); background: #fff; }
+.seat:focus { border-color: var(--focus); box-shadow: 0 0 0 3px rgba(30, 86, 49, 0.15); background: #fff; }
 .seat.has-text { font-weight: 600; }
-.seat.range-selected { background: #eaf1ec; border-color: #1e5631; box-shadow: inset 0 0 0 1px #1e5631; }
+.seat.range-selected { background: #eaf1ec; border-color: var(--focus); box-shadow: inset 0 0 0 1px var(--focus); }
 
 .table-footer { border-top: 1px solid var(--line); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 14px; }
 
@@ -175,7 +303,7 @@ body.dragging-arrangement, body.dragging-arrangement * {
 
 .waiting-item {
   position: relative; display: inline-flex; align-items: center; justify-content: center;
-  min-height: 40px; max-width: 100%; padding: 7px 24px 7px 13px; border: 1px solid var(--line-strong);
+  min-height: 40px; max-width: 100%; padding: 7px 14px; border: 1px solid var(--line-strong);
   border-radius: 9px; background: #fff; color: var(--ink); font-size: 16px;
   overflow-wrap: anywhere; cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none;
 }
@@ -256,20 +384,17 @@ body.dragging-arrangement, body.dragging-arrangement * {
 
   body { 
     background: #fff; 
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
     margin: 0;
     -webkit-print-color-adjust: exact; 
     print-color-adjust: exact; 
   }
   
   .page { 
-    max-width: none; 
-    padding: 0; 
-    margin: 0;
-    width: 100%;
+    max-width: none !important;
+    width: 100% !important;
+    height: 100vh !important;
+    padding: 0 !important;
+    margin: 0 !important;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -277,7 +402,7 @@ body.dragging-arrangement, body.dragging-arrangement * {
   }
 
   /* 2. 隐藏不需要打印的按钮和提示 */
-  .toolbar, .table-footer, .waiting-panel, h1, h2, .tip-right, .statusline, .site-footer { 
+  .toolbar, .table-footer, .waiting-panel, h1, h2, .tip-right, .statusline, .site-footer,.stage-add-btn, .remove-extra-seat { 
     display: none !important; 
   }
 
@@ -296,10 +421,11 @@ body.dragging-arrangement, body.dragging-arrangement * {
 
   table {
     width: 100% !important;
+    height: auto !important;
     margin: 0 auto !important;
     min-width: 0 !important;
     table-layout: fixed !important; 
-    border-spacing: 6px !important; 
+    border-spacing: 4px !important; 
   }
 
   thead th:first-child, tbody th {
@@ -312,6 +438,7 @@ body.dragging-arrangement, body.dragging-arrangement * {
   }
 
   thead th:not(.aisle-col), td:not(.aisle-col) {
+    width: auto !important;
     min-width: 0 !important;
   }
 
@@ -319,12 +446,9 @@ body.dragging-arrangement, body.dragging-arrangement * {
     border: 1px solid #7c7b7b2c !important;
     background: #fff !important;
     box-shadow: none !important;
+    white-space: nowrap !important; /* 打印时文字不换行 */
   }
 
-  tr {
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -340,15 +464,7 @@ body.dragging-arrangement, body.dragging-arrangement * {
   padding: 0;
   color: var(--muted);
 }
-#undoBtn svg {
-  width: 22px;
-  height: 22px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
+
 #undoBtn:disabled {
   opacity: .38;
   cursor: not-allowed;
@@ -424,4 +540,91 @@ body.dragging-arrangement, body.dragging-arrangement * {
 .site-footer a:hover {
   color: var(--accent-hover);
   background: var(--accent-soft);
+}
+
+/* ==========================================
+   iOS 风格右上角角标定位（半出半入姓名框边缘）
+   ========================================== */
+
+/* 1. 解除座位框和容器的裁剪，允许角标探出边框外 */
+.arranging-seats .seat,
+.waiting-item,
+.extra-seat-wrapper {
+  overflow: visible !important;
+}
+
+/* 2. 调整模式下的座位姓名框：恢复左右对称内边距，避免文字因为右侧预留空间而偏左 */
+.arranging-seats .seat {
+  padding: 4px 8px !important;
+}
+
+/* 3. 统一所有右上角按钮（蓝色暂存按钮、待分配区红叉、特座红叉）为 iOS 角标位置 */
+.remove-seat,
+.remove-waiting-item,
+.remove-extra-seat {
+  position: absolute !important;
+  top: -7px !important;
+  right: -7px !important;
+  width: 20px !important;
+  height: 20px !important;
+  z-index: 10 !important;
+  border: 2px solid #ffffff !important; /* 白色描边，仿 iOS 图标角标质感 */
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* ==========================================
+   10. 清空确认弹窗专属样式（由内联样式抽离）
+   ========================================== */
+.clear-modal-content {
+  max-width: 380px !important;
+  text-align: center;
+  gap: 18px;
+}
+.clear-modal-actions {
+  justify-content: center !important;
+}
+.btn.danger-btn {
+  background: #e34b4b;
+  border-color: #e34b4b;
+  color: #fff;
+}
+.btn.danger-btn:hover {
+  background: #c92f2f;
+  border-color: #c92f2f;
+}
+
+/* ==========================================
+   11. 独立 SVG 图标样式（支持 currentColor 自动继承颜色）
+   ========================================== */
+.icon {
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  pointer-events: none;
+}
+
+.icon-undo {
+  width: 22px;
+  height: 22px;
+  -webkit-mask-image: url("icons/undo.svg");
+  mask-image: url("icons/undo.svg");
+}
+
+.icon-minus {
+  width: 15px;
+  height: 15px;
+  -webkit-mask-image: url("icons/minus.svg");
+  mask-image: url("icons/minus.svg");
+}
+
+.icon-cross {
+  width: 13px;
+  height: 13px;
+  -webkit-mask-image: url("icons/cross.svg");
+  mask-image: url("icons/cross.svg");
 }

@@ -6,14 +6,15 @@
   let undoHistory = [], isComposingSeat = false, compositionUndoPending = false;
   let rows = 7, cols = 8, studentView = false, arrangeMode = false;
   let seats = Array.from({ length: rows }, () => Array(cols).fill(''));
+  let leftExtraSeats = [];
+  let rightExtraSeats = [];
   let unassigned = [], arrangeDrag = null, toastTimer = null;
   let pointerDown = null, dragSelecting = false, selectionRange = null;
   let lastFocusedCell = { r: 0, c: 0 };
 
   const get = id => document.getElementById(id);
-  const [table, rowsInput, colsInput, viewTitle, rotateLabel, topStage, bottomStage, seatCount, toast, arrangeBtn, undoBtn, waitingPanel, waitingList, waitingCount, waitingHint, customMenu, menuCopy, menuCut, menuPaste] =
-    ['seatTable', 'rowsInput', 'colsInput', 'viewTitle', 'rotateLabel', 'topStage', 'bottomStage', 'seatCount', 'toast', 'arrangeBtn', 'undoBtn', 'waitingPanel', 'waitingList', 'waitingCount', 'waitingHint', 'customMenu', 'menuCopy', 'menuCut', 'menuPaste'].map(get);
-
+  const [table, rowsInput, colsInput, viewTitle, rotateLabel, topStageArea, bottomStageArea, seatCount, toast, arrangeBtn, undoBtn, waitingPanel, waitingList, waitingCount, waitingHint, customMenu, menuCopy, menuCut, menuPaste, leftAddTop, rightAddTop, leftAddBottom, rightAddBottom, leftExtraTop, rightExtraTop, leftExtraBottom, rightExtraBottom] =
+    ['seatTable', 'rowsInput', 'colsInput', 'viewTitle', 'rotateLabel', 'topStageArea', 'bottomStageArea', 'seatCount', 'toast', 'arrangeBtn', 'undoBtn', 'waitingPanel', 'waitingList', 'waitingCount', 'waitingHint', 'customMenu', 'menuCopy', 'menuCut', 'menuPaste', 'leftAddTop', 'rightAddTop', 'leftAddBottom', 'rightAddBottom', 'leftExtraTop', 'rightExtraTop', 'leftExtraBottom', 'rightExtraBottom'].map(get);
   // 获取批量导入相关的弹窗及按钮元素
   const batchAddBtn = get('batchAddBtn');
   const batchModal = get('batchModal');
@@ -21,6 +22,18 @@
   const batchImportBtn = get('batchImportBtn');
   const batchCloseBtn = get('batchCloseBtn');
   const clearWaitingBtn = get('clearWaitingBtn');
+  const clearModal = get('clearModal');
+  const confirmClearBtn = get('confirmClearBtn');
+  const cancelClearBtn = get('cancelClearBtn');
+
+  // 克隆模板按钮的辅助函数
+  const createRemoveSeatBtn = () => get('tplRemoveSeatBtn').content.firstElementChild.cloneNode(true);
+  const createCrossBtn = (className, title) => {
+    const btn = get('tplCrossBtn').content.firstElementChild.cloneNode(true);
+    btn.className = className;
+    btn.title = title;
+    return btn;
+  };
 
   const cleanText = str => String(str ?? '').replace(/[\r\n]/g, ' ').trim();
   const escapeHtml = str => String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]);
@@ -37,11 +50,10 @@
   }
 
   function saveState() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ rows, cols, seats, studentView, unassigned })); } catch (_) {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ rows, cols, seats, leftExtraSeats, rightExtraSeats, studentView, unassigned })); } catch (_) {}
   }
 
-  const getSnapshot = () => ({ rows, cols, seats: seats.map(r => [...r]), studentView, unassigned: [...unassigned], lastFocusedCell: { ...lastFocusedCell } });
-
+  const getSnapshot = () => ({ rows, cols, seats: seats.map(r => [...r]), leftExtraSeats: [...leftExtraSeats], rightExtraSeats: [...rightExtraSeats], studentView, unassigned: [...unassigned], lastFocusedCell: { ...lastFocusedCell } });
   function updateUndoButton() {
     undoBtn.disabled = undoHistory.length === 0;
     undoBtn.title = undoBtn.disabled ? '暂无可撤销的操作' : '撤销（Ctrl+Z）';
@@ -58,7 +70,7 @@
   function undo() {
     if (undoHistory.length === 0) return showToast('没有可撤销的操作');
     const s = undoHistory.pop();
-    [rows, cols, studentView, seats, unassigned] = [s.rows, s.cols, s.studentView, s.seats.map(r => [...r]), [...s.unassigned]];
+    [rows, cols, studentView, seats, leftExtraSeats, rightExtraSeats, unassigned] = [s.rows, s.cols, s.studentView, s.seats.map(r => [...r]), [...(s.leftExtraSeats || [])], [...(s.rightExtraSeats || [])], [...s.unassigned]];
     lastFocusedCell = { r: Math.max(0, Math.min(rows - 1, s.lastFocusedCell?.r ?? 0)), c: Math.max(0, Math.min(cols - 1, s.lastFocusedCell?.c ?? 0)) };
     selectionRange = pointerDown = dragSelecting = arrangeDrag = null;
     customMenu.classList.remove('show');
@@ -77,6 +89,8 @@
       seats = Array.from({ length: rows }, (_, r) => Array.from({ length: cols }, (_, c) => cleanText(saved.seats?.[r]?.[c])));
       studentView = Boolean(saved.studentView);
       unassigned = Array.isArray(saved.unassigned) ? saved.unassigned.map(cleanText).filter(Boolean) : [];
+      leftExtraSeats = Array.isArray(saved.leftExtraSeats) ? saved.leftExtraSeats.map(cleanText) : [];
+      rightExtraSeats = Array.isArray(saved.rightExtraSeats) ? saved.rightExtraSeats.map(cleanText) : [];
     } catch (_) {}
   }
 
@@ -105,11 +119,7 @@
       item.appendChild(label);
 
       // 单独删除按钮（使用 HTML 中已有的 remove-waiting-item 样式）
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'remove-waiting-item';
-      removeBtn.textContent = '×';
-      removeBtn.title = '删除此名字';
+      const removeBtn = createCrossBtn('remove-waiting-item', '删除此名字');
       item.appendChild(removeBtn);
 
       waitingList.appendChild(item);
@@ -125,8 +135,8 @@
     arrangeBtn.setAttribute('aria-pressed', arrangeMode);
     arrangeBtn.classList.toggle('primary', arrangeMode);
     document.body.classList.toggle('arranging-seats', arrangeMode);
-    topStage.hidden = !studentView;
-    bottomStage.hidden = studentView;
+    topStageArea.hidden = !studentView;
+    bottomStageArea.hidden = studentView;
     seatCount.textContent = `${rows} 行 × ${cols} 列 · 共 ${rows * cols} 座位`;
     // 动态计算表格最小宽度：每列大约分配 75px，保证列多时出现横向滚动条而不至于挤压
     table.style.minWidth = `${Math.max(850, cols * 78)}px`;
@@ -172,11 +182,7 @@
           label.textContent = seats[r][c];
           editor.appendChild(label);
           if (seats[r][c]) {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'remove-seat';
-            btn.textContent = '—';
-            btn.title = '移至待分配区';
+            const btn = createRemoveSeatBtn();
             editor.appendChild(btn);
           }
         } else {
@@ -189,6 +195,68 @@
       tbody.appendChild(tr);
     }
     table.replaceChildren(thead, tbody);
+// 渲染讲台两侧特座组的辅助函数
+    // 渲染讲台两侧特座组的辅助函数
+    const renderExtraGroup = (groupEl, list, side) => {
+      groupEl.replaceChildren();
+      if (list.length === 0) return;
+      list.forEach((name, index) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'extra-seat-wrapper';
+
+        const editor = document.createElement('div');
+        editor.className = `seat${name ? ' has-text' : ''}`;
+        editor.dataset.side = side;
+        editor.dataset.index = index;
+        editor.spellcheck = false;
+
+        if (arrangeMode) {
+          editor.contentEditable = 'false';
+          const label = document.createElement('span');
+          label.className = 'seat-label';
+          label.textContent = name;
+          editor.appendChild(label);
+
+          // 调整模式下有姓名时，右上角显示蓝色“—”暂存按钮
+          if (name) {
+            const btn = createRemoveSeatBtn();
+            editor.appendChild(btn);
+          }
+        } else {
+          editor.contentEditable = 'true';
+          editor.textContent = name;
+        }
+        wrapper.appendChild(editor);
+
+        // 非调整模式下，如果框内是空白的，右上角出现红色叉号删除框
+        if (!name && !arrangeMode) {
+          const rmBtn = createCrossBtn('remove-extra-seat', '删除此特座姓名框');
+          rmBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            recordUndo();
+            if (side === 'left') leftExtraSeats.splice(index, 1);
+            else rightExtraSeats.splice(index, 1);
+            render();
+            showToast('已删除特座姓名框');
+          });
+          wrapper.appendChild(rmBtn);
+        }
+        groupEl.appendChild(wrapper);
+      });
+    };
+
+    // 根据当前教师/学生视角将特座分派到对应的讲台左右
+    if (studentView) {
+      renderExtraGroup(leftExtraTop, leftExtraSeats, 'left');
+      renderExtraGroup(rightExtraTop, rightExtraSeats, 'right');
+      leftExtraBottom.replaceChildren();
+      rightExtraBottom.replaceChildren();
+    } else {
+      renderExtraGroup(leftExtraBottom, leftExtraSeats, 'left');
+      renderExtraGroup(rightExtraBottom, rightExtraSeats, 'right');
+      leftExtraTop.replaceChildren();
+      rightExtraTop.replaceChildren();
+    }
     renderWaitingArea();
     saveState();
     updateUndoButton();
@@ -295,40 +363,22 @@
     showToast(`成功导入 ${names.length} 人到待分配区`);
   });
 
-  // 待分配区：清空按钮
-clearWaitingBtn.addEventListener('click', () => {
+  const closeClearModal = () => { clearModal.hidden = true; };
+  clearWaitingBtn.addEventListener('click', () => {
     if (unassigned.length === 0) return showToast('待分配区已经是空的');
+    clearModal.hidden = false;
+  });
+  cancelClearBtn.addEventListener('click', closeClearModal);
+  clearModal.addEventListener('click', (e) => {
+    if (e.target === clearModal) closeClearModal();
+  });
 
-    // 1. 动态创建美观的遮罩层和弹窗
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.innerHTML = `
-      <div class="modal-content" style="max-width: 380px; text-align: center; gap: 18px;">
-        <h3 style="margin-bottom: -4px;">清空确认</h3>
-        <p>确定要清空待分配区的所有学生吗？此操作可按 Ctrl+Z 撤销。</p>
-        <div class="modal-actions" style="justify-content: center;">
-          <button class="btn primary" id="confirmClearBtn" type="button" style="background: #e34b4b; border-color: #e34b4b;">确定清空</button>
-          <button class="btn" id="cancelClearBtn" type="button">取消</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-
-    // 2. 绑定按钮事件
-    const closeOverlay = () => overlay.remove();
-
-    overlay.querySelector('#cancelClearBtn').addEventListener('click', closeOverlay);
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) closeOverlay(); // 点击遮罩空白处也可以关闭
-    });
-
-    overlay.querySelector('#confirmClearBtn').addEventListener('click', () => {
-      closeOverlay();
-      recordUndo();
-      unassigned = [];
-      render();
-      showToast('已清空待分配区');
-    });
+  confirmClearBtn.addEventListener('click', () => {
+    closeClearModal();
+    recordUndo();
+    unassigned = [];
+    render();
+    showToast('已清空待分配区');
   });
 
   // 待分配区：单独删除名字按钮
@@ -522,12 +572,29 @@ clearWaitingBtn.addEventListener('click', () => {
     showToast(arrangeMode ? '已进入调整模式：拖动学生交换位置，点 × 可移至待分配区' : '已完成座位调整');
   });
 
-  table.addEventListener('click', e => {
+  const board = table.closest('.board');
+  board.addEventListener('click', e => {
     const btn = e.target.closest('.remove-seat');
     if (!btn || !arrangeMode) return;
     e.preventDefault(); e.stopPropagation();
     const editor = btn.closest('.seat');
     if (!editor) return;
+
+    // 判断是普通网格座位还是讲台旁的特座
+    if (editor.dataset.side) {
+      const side = editor.dataset.side;
+      const index = Number(editor.dataset.index);
+      const list = side === 'left' ? leftExtraSeats : rightExtraSeats;
+      const name = list[index] ?? '';
+      if (!name) return;
+      recordUndo();
+      list[index] = '';
+      unassigned.push(name);
+      selectionRange = null;
+      render();
+      return showToast(`${name} 已移至待分配区`);
+    }
+
     const [r, c] = [Number(editor.dataset.r), Number(editor.dataset.c)];
     const name = seats[r]?.[c] ?? '';
     if (!name) return;
@@ -547,13 +614,27 @@ clearWaitingBtn.addEventListener('click', () => {
     arrangeDrag = { source, element: el, startX: e.clientX, startY: e.clientY, started: false, target: null };
   };
 
-  table.addEventListener('pointerdown', e => {
-    if (!arrangeMode || e.target.closest('.remove-seat')) return;
-    const editor = e.target.closest('.seat');
-    if (editor && table.contains(editor) && seats[editor.dataset.r]?.[editor.dataset.c]) {
-      beginArrangeDrag(e, { type: 'seat', r: Number(editor.dataset.r), c: Number(editor.dataset.c) }, editor);
+  board.addEventListener('pointerdown', e => {
+  if (!arrangeMode || e.target.closest('.remove-seat')) return;
+  const editor = e.target.closest('.seat');
+  if (!editor || !board.contains(editor)) return;
+
+  // 讲台旁特座作为拖拽起点
+  if (editor.dataset.side) {
+    const side = editor.dataset.side;
+    const index = Number(editor.dataset.index);
+    const list = side === 'left' ? leftExtraSeats : rightExtraSeats;
+    if (list[index]) {
+      beginArrangeDrag(e, { type: 'extra', side, index }, editor);
     }
-  });
+    return;
+  }
+
+  // 普通座位作为拖拽起点
+  if (seats[editor.dataset.r]?.[editor.dataset.c]) {
+    beginArrangeDrag(e, { type: 'seat', r: Number(editor.dataset.r), c: Number(editor.dataset.c) }, editor);
+  }
+});
 
   waitingList.addEventListener('pointerdown', e => {
     if (!arrangeMode) return;
@@ -565,7 +646,7 @@ clearWaitingBtn.addEventListener('click', () => {
 
   function cleanArrangeDrag(commit = false) {
     document.body.classList.remove('dragging-arrangement');
-    table.querySelectorAll('.dragging-seat, .drop-target').forEach(el => el.classList.remove('dragging-seat', 'drop-target'));
+    board.querySelectorAll('.dragging-seat, .drop-target').forEach(el => el.classList.remove('dragging-seat', 'drop-target'));
     waitingList.querySelectorAll('.dragging-seat').forEach(el => el.classList.remove('dragging-seat'));
     waitingPanel.classList.remove('drop-target');
 
@@ -586,16 +667,20 @@ clearWaitingBtn.addEventListener('click', () => {
     }
     e.preventDefault();
     
-    table.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    board.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
     waitingPanel.classList.remove('drop-target');
     arrangeDrag.target = null;
 
     const under = document.elementFromPoint(e.clientX, e.clientY);
     const targetSeat = under?.closest?.('.seat');
-    if (targetSeat && table.contains(targetSeat)) {
+    if (targetSeat && board.contains(targetSeat)) {
       targetSeat.classList.add('drop-target');
-      arrangeDrag.target = { type: 'seat', r: Number(targetSeat.dataset.r), c: Number(targetSeat.dataset.c) };
-    } else if (arrangeDrag.source.type === 'seat' && under && waitingPanel.contains(under)) {
+      if (targetSeat.dataset.side) {
+        arrangeDrag.target = { type: 'extra', side: targetSeat.dataset.side, index: Number(targetSeat.dataset.index) };
+      } else {
+        arrangeDrag.target = { type: 'seat', r: Number(targetSeat.dataset.r), c: Number(targetSeat.dataset.c) };
+      }
+    } else if ((arrangeDrag.source.type === 'seat' || arrangeDrag.source.type === 'extra') && under && waitingPanel.contains(under)) {
       waitingPanel.classList.add('drop-target');
       arrangeDrag.target = { type: 'waiting' };
     }
@@ -605,42 +690,71 @@ clearWaitingBtn.addEventListener('click', () => {
   document.addEventListener('pointercancel', () => cleanArrangeDrag(false));
 
   function performArrangeDrop(source, target) {
-    selectionRange = null;
-    if (source.type === 'seat') {
-      const srcName = seats[source.r]?.[source.c] ?? '';
-      if (!srcName) return;
-      if (target.type === 'waiting') {
+  selectionRange = null;
+
+  // 统一读取和写入不同类型座位的方法
+  const getSeatVal = (loc) => {
+    if (loc.type === 'seat') return seats[loc.r]?.[loc.c] ?? '';
+    if (loc.type === 'extra') return (loc.side === 'left' ? leftExtraSeats : rightExtraSeats)[loc.index] ?? '';
+    return '';
+  };
+  const setSeatVal = (loc, val) => {
+    if (loc.type === 'seat') seats[loc.r][loc.c] = val;
+    if (loc.type === 'extra') (loc.side === 'left' ? leftExtraSeats : rightExtraSeats)[loc.index] = val;
+  };
+
+  // 1. 起点是桌面上的座位（普通座位 或 讲台特座）
+  if (source.type === 'seat' || source.type === 'extra') {
+    const srcName = getSeatVal(source);
+    if (!srcName) return;
+
+    // 拖入待分配区
+    if (target.type === 'waiting') {
+      recordUndo();
+      setSeatVal(source, '');
+      unassigned.push(srcName);
+      render();
+      return showToast(`${srcName} 已移至待分配区`);
+    }
+
+    // 拖到另一个座位（普通座位 或 讲台特座）进行交换/移动
+    if (target.type === 'seat' || target.type === 'extra') {
+      const isSame = source.type === target.type && (
+        source.type === 'seat'
+          ? (source.r === target.r && source.c === target.c)
+          : (source.side === target.side && source.index === target.index)
+      );
+      if (!isSame) {
+        const tgtName = getSeatVal(target);
         recordUndo();
-        seats[source.r][source.c] = '';
-        unassigned.push(srcName);
-        render();
-        return showToast(`${srcName} 已移至待分配区`);
-      }
-      if (target.type === 'seat' && (source.r !== target.r || source.c !== target.c)) {
-        const tgtName = seats[target.r]?.[target.c] ?? '';
-        recordUndo();
-        [seats[source.r][source.c], seats[target.r][target.c]] = [tgtName, srcName];
+        setSeatVal(source, tgtName);
+        setSeatVal(target, srcName);
         render();
         return showToast(tgtName ? '已交换两名学生的座位' : '已移动到空座位');
       }
     }
-
-    if (source.type === 'waiting' && target.type === 'seat') {
-      const srcName = unassigned[source.index];
-      if (srcName === undefined) return;
-      const displaced = seats[target.r]?.[target.c] ?? '';
-      recordUndo();
-      seats[target.r][target.c] = srcName;
-      unassigned.splice(source.index, 1);
-      if (displaced) unassigned.push(displaced);
-      render();
-      showToast(displaced ? '已安排学生，原座位学生移至待分配区' : '已安排学生到座位');
-    }
   }
+
+  // 2. 起点是待分配区，拖入普通座位 或 讲台特座
+  if (source.type === 'waiting' && (target.type === 'seat' || target.type === 'extra')) {
+    const srcName = unassigned[source.index];
+    if (srcName === undefined) return;
+    const displaced = getSeatVal(target);
+    recordUndo();
+    setSeatVal(target, srcName);
+    unassigned.splice(source.index, 1);
+    if (displaced) unassigned.push(displaced);
+    render();
+    showToast(displaced ? '已安排学生，原座位学生移至待分配区' : '已安排学生到座位');
+  }
+}
 
   get('rotateBtn').addEventListener('click', () => {
     recordUndo();
     seats.reverse().forEach(row => row.reverse());
+    const temp = leftExtraSeats.reverse();
+    leftExtraSeats = rightExtraSeats.reverse();
+    rightExtraSeats = temp;
     selectionRange = null;
     studentView = !studentView;
     render();
@@ -693,6 +807,52 @@ clearWaitingBtn.addEventListener('click', () => {
       const { r: startR, c: startC } = getStartCoords();
       pasteMatrix(startR, startC, matrix);
     } catch (_) { showToast('粘贴失败，请使用 Ctrl+V'); }
+  });
+
+  const addExtraSeat = (side) => {
+    recordUndo();
+    if (side === 'left') leftExtraSeats.push('');
+    else rightExtraSeats.push('');
+    render();
+    showToast('已添加讲台旁特座');
+  };
+
+  leftAddTop.addEventListener('click', () => addExtraSeat('left'));
+  rightAddTop.addEventListener('click', () => addExtraSeat('right'));
+  leftAddBottom.addEventListener('click', () => addExtraSeat('left'));
+  rightAddBottom.addEventListener('click', () => addExtraSeat('right'));
+
+  // 监听特座输入框文字变化（采用局部更新，避免全量 render 导致光标丢失）
+  document.addEventListener('input', e => {
+    const seatEl = e.target.closest('.extra-seat-wrapper .seat');
+    if (!seatEl) return;
+    const side = seatEl.dataset.side;
+    const index = Number(seatEl.dataset.index);
+    const val = cleanText(seatEl.textContent);
+
+    if (side === 'left') leftExtraSeats[index] = val;
+    if (side === 'right') rightExtraSeats[index] = val;
+
+    seatEl.classList.toggle('has-text', Boolean(val));
+    
+    // 动态管理叉号显示：有文字时移除叉号，无文字时如果叉号不存在则补上
+    const wrapper = seatEl.closest('.extra-seat-wrapper');
+    const existingRm = wrapper.querySelector('.remove-extra-seat');
+    if (val && existingRm) {
+      existingRm.remove();
+    } else if (!val && !existingRm && !arrangeMode) {
+      const rmBtn = createCrossBtn('remove-extra-seat', '删除此特座姓名框');
+      rmBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        recordUndo();
+        if (side === 'left') leftExtraSeats.splice(index, 1);
+        else rightExtraSeats.splice(index, 1);
+        render();
+        showToast('已删除特座姓名框');
+      });
+      wrapper.appendChild(rmBtn);
+    }
+    saveState();
   });
 
   loadState();

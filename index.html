@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>班级座位表编辑神器</title>
-<link rel="stylesheet" href="style.css?v=20261113-1">
+<link rel="stylesheet" href="style.css?v=20261113-3">
 <link rel="icon" href="favicon.jpg" type="image/jpeg">
 </head>
 <body>
@@ -22,17 +22,14 @@
         <label for="colsInput">列</label>
         <input id="colsInput" type="number" min="1" max="20" value="8" aria-label="列数" />
       </div>
+      <button class="btn" id="batchAddBtn" type="button" title="批量添加名单">批量添加</button>
     </div>
     <div class="toolbar-right">
       <button class="btn undo-btn" id="undoBtn" type="button" aria-label="撤销" title="撤销（Ctrl+Z）" disabled>
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M3 7v6h6"></path>
-          <path d="M3 13a9 9 0 1 0 2.64-6.36L3 9"></path>
-        </svg>
+        <span class="icon icon-undo" aria-hidden="true"></span>
       </button>
-      <button class="btn" id="batchAddBtn" type="button">批量添加</button>
-      <button class="btn" id="arrangeBtn" type="button" aria-pressed="false">调整座位</button>
-      <button class="btn primary" id="rotateBtn" type="button"><span id="rotateLabel">旋转 180°</span></button>
+      <button class="btn" id="arrangeBtn" type="button" aria-pressed="false" title="点击开启调整座位功能">调整座位</button>
+      <button class="btn primary" id="rotateBtn" type="button" title="旋转座位表视角°"><span id="rotateLabel">旋转 180°</span></button>
     </div>
   </div>
   <div class="tip-right">
@@ -45,14 +42,31 @@
   </div>
   <div class="tips">
     <h2>鼠标拖动多选，可批量复制粘贴；</h2>
-    <h2>点击“调整座位”后，拖动姓名可以互换座位，点 × 可以暂存姓名。</h2>
+    <h2>点击“调整座位”后，拖动姓名可以互换座位，点“ — ”可以暂存姓名。</h2>
   </div>
   <section class="board">
-    <div class="stage" id="topStage"><span class="stage-line"></span>讲 台<span class="stage-line"></span></div>
+    <!-- 顶部讲台区域（学生视角时显示在顶部） -->
+    <div class="stage-area" id="topStageArea">
+      <div class="stage">
+        <button class="stage-add-btn" id="leftAddTop" title="在此添加座位" type="button">+</button>
+        <div class="extra-seats-group left" id="leftExtraTop"></div>
+        <div class="stage-center">讲 台</div>
+        <div class="extra-seats-group right" id="rightExtraTop"></div>
+        <button class="stage-add-btn" id="rightAddTop" title="在此添加座位" type="button">+</button>
+      </div>
+    </div>
     <div class="grid-wrap">
       <table id="seatTable"></table>
     </div>
-    <div class="stage bottom" id="bottomStage" hidden><span class="stage-line"></span><span>讲 台</span><span class="stage-line"></span></div>
+    <div class="stage-area" id="bottomStageArea" hidden>
+      <div class="stage bottom">
+        <button class="stage-add-btn" id="leftAddBottom" title="在此添加座位" type="button">+</button>
+        <div class="extra-seats-group left" id="leftExtraBottom"></div>
+        <div class="stage-center"><span>讲 台</span></div>
+        <div class="extra-seats-group right" id="rightExtraBottom"></div>
+        <button class="stage-add-btn" id="rightAddBottom" title="在此添加座位" type="button">+</button>
+      </div>
+    </div>
     <div class="table-footer">
       <span id="seatCount">7 行 × 8 列</span>
     </div>
@@ -74,9 +88,7 @@
     <p>
       Made by 
       <a href="https://github.com/Putaolaozu/seatconvertor" target="_blank" rel="noopener noreferrer" aria-label="putaolaozu 的 GitHub 主页">
-        <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
-          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-        </svg>
+        <img src="icons/github.svg" width="16" height="16" alt="" aria-hidden="true">
         putaolaozu
       </a>
     </p>
@@ -96,12 +108,34 @@
     </div>
   </div>
 </div>
-
+<!-- 清空确认弹窗 -->
+<div class="modal-overlay" id="clearModal" hidden>
+  <div class="modal-content clear-modal-content">
+    <h3>清空确认</h3>
+    <p>确定要清空待分配区的所有学生吗？此操作可按 Ctrl+Z 撤销。</p>
+    <div class="modal-actions clear-modal-actions">
+      <button class="btn primary danger-btn" id="confirmClearBtn" type="button">确定清空</button>
+      <button class="btn" id="cancelClearBtn" type="button">取消</button>
+    </div>
+  </div>
+</div>
+<!-- 蓝色“移至待分配区”减号按钮 -->
+<template id="tplRemoveSeatBtn">
+  <button type="button" class="remove-seat" title="移至待分配区">
+    <span class="icon icon-minus" aria-hidden="true"></span>
+  </button>
+</template>
+<!-- 红色“删除名字 / 删除特座”叉号按钮 -->
+<template id="tplCrossBtn">
+  <button type="button">
+    <span class="icon icon-cross" aria-hidden="true"></span>
+  </button>
+</template>
 <div id="customMenu" class="custom-context-menu">
   <div class="menu-item" id="menuCopy">复制</div>
   <div class="menu-item" id="menuCut">剪切</div>
   <div class="menu-item" id="menuPaste">粘贴</div>
 </div>
-<script src="script.js?v=20261113-1"></script>
+<script src="script.js?v=20261113-3"></script>
 </body>
 </html>
