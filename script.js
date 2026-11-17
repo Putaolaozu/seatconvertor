@@ -841,6 +841,23 @@
     saveState();
   });
 
+  // 根据列数自动调整页面宽度
+  (() => {
+    const wideLayoutColsInput = document.getElementById('colsInput');
+    const wideLayoutPage = document.querySelector('.page');
+
+    function updateWideLayout() {
+      const cols = Number(wideLayoutColsInput.value) || 1;
+      wideLayoutPage.classList.toggle('wide-layout', cols > 8);
+    }
+
+    // 监听列数变化
+    wideLayoutColsInput.addEventListener('input', updateWideLayout);
+
+    // 页面初始化时执行一次
+    updateWideLayout();
+  })();
+
   loadState();
   render();
 })();

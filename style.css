@@ -588,3 +588,30 @@ body.dragging-arrangement, body.dragging-arrangement * {
   -webkit-mask-image: url("icons/cross.svg");
   mask-image: url("icons/cross.svg");
 }
+
+/* ==========================================
+   12. 超过 8 列时，页面随座位表自适应增宽
+   ========================================== */
+@media screen {
+  .page.wide-layout {
+    width: max-content;
+    max-width: calc(100vw - 56px);
+  }
+
+  .page.wide-layout .board {
+    width: max-content;
+    max-width: 100%;
+  }
+
+  .page.wide-layout .grid-wrap {
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}
+
+@media screen and (max-width: 700px) {
+  .page.wide-layout {
+    max-width: calc(100vw - 24px);
+  }
+}
