@@ -5,7 +5,22 @@
   
   let undoHistory = [], isComposingSeat = false, compositionUndoPending = false;
   let rows = 7, cols = 8, studentView = false, arrangeMode = false;
+
+  // aisleGaps[i] 表示第 i 列与第 i+1 列之间是否留过道。
+  // 默认沿用旧版布局：每两列之间留一条过道。
+  const createDefaultAisleGaps = columnCount =>
+    Array.from({ length: Math.max(0, columnCount - 1) }, (_, i) => (i + 1) % 2 === 0);
+
+  // 兼容旧版本地数据，并在增加列数时为新增边界补上默认状态。
+  const normalizeAisleGaps = (savedGaps, columnCount) => {
+    const defaults = createDefaultAisleGaps(columnCount);
+    return defaults.map((defaultValue, i) =>
+      typeof savedGaps?.[i] === 'boolean' ? savedGaps[i] : defaultValue
+    );
+  };
+
   let seats = Array.from({ length: rows }, () => Array(cols).fill(''));
+  let aisleGaps = createDefaultAisleGaps(cols);
   let leftExtraSeats = [];
   let rightExtraSeats = [];
   let unassigned = [], arrangeDrag = null, toastTimer = null;
@@ -70,10 +85,10 @@
   }
 
   function saveState() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ rows, cols, seats, leftExtraSeats, rightExtraSeats, studentView, unassigned })); } catch (_) {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ rows, cols, seats, aisleGaps, leftExtraSeats, rightExtraSeats, studentView, unassigned })); } catch (_) {}
   }
 
-  const getSnapshot = () => ({ rows, cols, seats: seats.map(r => [...r]), leftExtraSeats: [...leftExtraSeats], rightExtraSeats: [...rightExtraSeats], studentView, unassigned: [...unassigned], lastFocusedCell: { ...lastFocusedCell } });
+  const getSnapshot = () => ({ rows, cols, seats: seats.map(r => [...r]), aisleGaps: [...aisleGaps], leftExtraSeats: [...leftExtraSeats], rightExtraSeats: [...rightExtraSeats], studentView, unassigned: [...unassigned], lastFocusedCell: { ...lastFocusedCell } });
   function updateUndoButton() {
     undoBtn.disabled = undoHistory.length === 0;
     undoBtn.title = undoBtn.disabled ? '暂无可撤销的操作' : '撤销（Ctrl+Z）';
@@ -91,6 +106,7 @@
     if (undoHistory.length === 0) return showToast('没有可撤销的操作');
     const s = undoHistory.pop();
     [rows, cols, studentView, seats, leftExtraSeats, rightExtraSeats, unassigned] = [s.rows, s.cols, s.studentView, s.seats.map(r => [...r]), [...(s.leftExtraSeats || [])], [...(s.rightExtraSeats || [])], [...s.unassigned]];
+    aisleGaps = normalizeAisleGaps(s.aisleGaps, cols);
     lastFocusedCell = { r: Math.max(0, Math.min(rows - 1, s.lastFocusedCell?.r ?? 0)), c: Math.max(0, Math.min(cols - 1, s.lastFocusedCell?.c ?? 0)) };
     selectionRange = pointerDown = dragSelecting = arrangeDrag = null;
     customMenu.classList.remove('show');
@@ -107,6 +123,7 @@
       rows = Math.max(1, Math.min(MAX_SIZE, Number(saved.rows) || 7));
       cols = Math.max(1, Math.min(MAX_SIZE, Number(saved.cols) || 8));
       seats = Array.from({ length: rows }, (_, r) => Array.from({ length: cols }, (_, c) => cleanText(saved.seats?.[r]?.[c])));
+      aisleGaps = normalizeAisleGaps(saved.aisleGaps, cols);
       studentView = Boolean(saved.studentView);
       unassigned = Array.isArray(saved.unassigned) ? saved.unassigned.map(cleanText).filter(Boolean) : [];
       leftExtraSeats = Array.isArray(saved.leftExtraSeats) ? saved.leftExtraSeats.map(cleanText) : [];
@@ -161,18 +178,53 @@
     // 动态计算表格最小宽度：每列大约分配 75px，保证列多时出现横向滚动条而不至于挤压
     table.style.minWidth = `${Math.max(850, cols * 78)}px`;
 
+    // 每个列边界都保留一个过道单元格；关闭时宽度收起，图标仍可点击。
+    const createAisleCell = (tagName, boundary, withButton = false) => {
+      const cell = document.createElement(tagName);
+      const isOpen = Boolean(aisleGaps[boundary]);
+      cell.className = `aisle-col ${isOpen ? 'is-open' : 'is-closed'}`;
+
+      if (withButton) {
+        cell.classList.add('aisle-control-cell');
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'aisle-toggle-btn';
+        button.dataset.boundary = boundary;
+        button.title = isOpen ? '取消此处过道' : '在此处增加过道';
+        button.setAttribute('aria-label', button.title);
+        button.setAttribute('aria-pressed', String(isOpen));
+
+        // SVG 图标独立存放在 icons 目录，JS 只负责根据状态切换 CSS 类。
+        // 已有过道时显示“合并”图标；没有过道时显示“打开过道”图标。
+        const icon = document.createElement('span');
+        icon.className = `aisle-toggle-icon ${isOpen ? 'aisle-icon-close' : 'aisle-icon-open'}`;
+        icon.setAttribute('aria-hidden', 'true');
+        button.appendChild(icon);
+        cell.appendChild(button);
+      }
+      return cell;
+    };
+
     const thead = document.createElement('thead');
+
+    // 图标控制行：每个相邻列的边界都有一个可点击按钮。
+    const controlRow = document.createElement('tr');
+    controlRow.className = 'aisle-control-row';
+    controlRow.appendChild(document.createElement('th'));
+    for (let c = 0; c < cols; c++) {
+      controlRow.appendChild(document.createElement('th'));
+      if (c < cols - 1) controlRow.appendChild(createAisleCell('th', c, true));
+    }
+    thead.appendChild(controlRow);
+
     const headerRow = document.createElement('tr');
     headerRow.appendChild(document.createElement('th'));
     for (let c = 0; c < cols; c++) {
-      if (c > 0 && c % 2 === 0) {
-        const thAis = document.createElement('th');
-        thAis.className = 'aisle-col';
-        headerRow.appendChild(thAis);
-      }
       const th = document.createElement('th');
       th.textContent = `第${studentView ? cols - c : c + 1}列`;
       headerRow.appendChild(th);
+      if (c < cols - 1) headerRow.appendChild(createAisleCell('th', c));
     }
     thead.appendChild(headerRow);
 
@@ -183,15 +235,11 @@
       rowHead.textContent = `第${studentView ? r + 1 : rows - r}行`;
       tr.appendChild(rowHead);
       for (let c = 0; c < cols; c++) {
-        if (c > 0 && c % 2 === 0) {
-          const tdAis = document.createElement('td');
-          tdAis.className = 'aisle-col';
-          tr.appendChild(tdAis);
-        }
         const td = document.createElement('td');
         const editor = createSeatEditor(seats[r][c], { r, c }, isInSelection(r, c));
         td.appendChild(editor);
         tr.appendChild(td);
+        if (c < cols - 1) tr.appendChild(createAisleCell('td', c));
       }
       tbody.appendChild(tr);
     }
@@ -240,6 +288,7 @@
     selectionRange = null;
     rows = nextRows;
     cols = nextCols;
+    aisleGaps = normalizeAisleGaps(aisleGaps, cols);
     seats = Array.from({ length: rows }, (_, r) => Array.from({ length: cols }, (_, c) => seats[r]?.[c] ?? ''));
     render();
   }
@@ -268,7 +317,9 @@
 
     if (targetRows !== rows || targetCols !== cols) {
       seats = Array.from({ length: targetRows }, (_, r) => Array.from({ length: targetCols }, (_, c) => seats[r]?.[c] ?? ''));
-      rows = targetRows; cols = targetCols;
+      rows = targetRows;
+      cols = targetCols;
+      aisleGaps = normalizeAisleGaps(aisleGaps, cols);
     }
 
     matrix.forEach((line, r) => line.forEach((val, c) => {
@@ -367,6 +418,21 @@
   });
 
   // 事件监听绑定
+  table.addEventListener('click', e => {
+    const toggleButton = e.target.closest('.aisle-toggle-btn');
+    if (!toggleButton) return;
+
+    e.preventDefault();
+    const boundary = Number(toggleButton.dataset.boundary);
+    if (!Number.isInteger(boundary) || boundary < 0 || boundary >= cols - 1) return;
+
+    recordUndo();
+    aisleGaps[boundary] = !aisleGaps[boundary];
+    selectionRange = null;
+    render();
+    showToast(aisleGaps[boundary] ? '已增加过道' : '已取消过道');
+  });
+
   table.addEventListener('focusin', e => {
     const editor = e.target.closest('.seat');
     if (editor) lastFocusedCell = { r: Number(editor.dataset.r), c: Number(editor.dataset.c) };
@@ -751,6 +817,7 @@
   get('rotateBtn').addEventListener('click', () => {
     recordUndo();
     seats.reverse().forEach(row => row.reverse());
+    aisleGaps.reverse();
     const temp = leftExtraSeats.reverse();
     leftExtraSeats = rightExtraSeats.reverse();
     rightExtraSeats = temp;

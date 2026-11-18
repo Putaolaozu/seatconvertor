@@ -185,14 +185,67 @@ h2 {font-size: medium;}
 }
 
 .grid-wrap { width: 100%; overflow-x: auto; padding: 6px 20px 24px; text-align: center; }
-table { width: max-content; margin: 0 auto; table-layout: fixed; border-collapse: separate; border-spacing: 8px; }
+table { width: max-content; margin: 0 auto; table-layout: fixed; border-collapse: separate; border-spacing: 4px 8px; }
 thead th { color: #82857d; font-size: 15px; font-weight: 700; padding: 0 0 4px; text-align: center; white-space: nowrap; }
 thead th:first-child { width: 65px; }
 tbody th { color: #8f928a; font-size: 15px; font-weight: 600; text-align: center; white-space: nowrap; }
+thead th:first-child, tbody th { padding-right: 4px; }
 td { padding: 0; height: 46px; vertical-align: middle; }
-.aisle-col { width: 28px !important; min-width: 28px !important; }
-thead th:not(.aisle-col), td:not(.aisle-col) { min-width: 95px; }
+.aisle-col { width: 36px !important; min-width: 36px !important; padding: 0 !important; }
+.aisle-col.is-closed { width: 0 !important; min-width: 0 !important; }
+.aisle-control-row th { height: 20px; padding: 0 !important; }
+.aisle-control-cell { position: relative; overflow: visible; }
+.aisle-toggle-btn {
+  position: absolute; z-index: 6; left: 50%; transform: translateX(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0;
+  border: 1px solid transparent; border-radius: 6px;
+  background: #f6f8f4; color: #858b80; cursor: pointer;
+  transition: color .15s, background .15s, border-color .15s;
+}
+/* 有过道：图标移动到过道中间 */
+.aisle-control-cell.is-open .aisle-toggle-btn {
+  top: calc(100% + 215px);
+}
 
+/* 没有过道：图标位于相邻两列上方 */
+.aisle-control-cell.is-closed .aisle-toggle-btn {
+  top: calc(100% + 20px);
+}
+
+.aisle-toggle-btn:hover,
+.aisle-toggle-btn:focus-visible {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--line);
+  outline: none;
+}
+
+/* SVG 图标尺寸 */
+.aisle-toggle-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  pointer-events: none;
+}
+
+/* 增加过道 */
+.aisle-icon-open {
+  background-image: url("icons/aisle-open.svg");
+}
+
+/* 删除过道 */
+.aisle-icon-close {
+  background-image: url("icons/aisle-close.svg");
+}
+
+thead th:not(.aisle-col),
+td:not(.aisle-col) {
+  min-width: 95px;
+}
 .seat {
   width: 100%; height: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 10px;
   background: #fdfdfc; display: flex; align-items: center; justify-content: center; padding: 4px 8px;
@@ -390,16 +443,22 @@ body.dragging-arrangement, body.dragging-arrangement * {
     margin: 0 auto !important;
     min-width: 0 !important;
     table-layout: fixed !important; 
-    border-spacing: 4px !important; 
+    border-spacing: 2px 4px !important; 
   }
 
   thead th:first-child, tbody th {
     width: 35px !important;
+    padding-right: 2px !important;
   }
 
-  .aisle-col { 
-    width: 12px !important; 
-    min-width: 12px !important; 
+  .aisle-control-row { display: none !important; }
+  .aisle-col.is-open {
+    width: 16px !important;
+    min-width: 16px !important;
+  }
+  .aisle-col.is-closed {
+    width: 0 !important;
+    min-width: 0 !important;
   }
 
   thead th:not(.aisle-col), td:not(.aisle-col) {
