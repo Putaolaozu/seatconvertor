@@ -928,22 +928,21 @@
   });
 
   // 根据列数自动调整页面宽度
-  (() => {
-    const wideLayoutColsInput = document.getElementById('colsInput');
-    const wideLayoutPage = document.querySelector('.page');
+    const syncWideLayout = (() => {
+      const wideLayoutColsInput = document.getElementById('colsInput');
+      const wideLayoutPage = document.querySelector('.page');
 
-    function updateWideLayout() {
-      const cols = Number(wideLayoutColsInput.value) || 1;
-      wideLayoutPage.classList.toggle('wide-layout', cols > 8);
-    }
+      function updateWideLayout() {
+        const currentCols = Number(wideLayoutColsInput.value) || cols || 1;
+        wideLayoutPage.classList.toggle('wide-layout', currentCols > 8);
+      }
 
-    // 监听列数变化
-    wideLayoutColsInput.addEventListener('input', updateWideLayout);
-
-    // 页面初始化时执行一次
-    updateWideLayout();
-  })();
+      wideLayoutColsInput.addEventListener('input', updateWideLayout);
+      wideLayoutColsInput.addEventListener('change', updateWideLayout);
+      return updateWideLayout;
+    })();
 
   loadState();
   render();
+  syncWideLayout();
 })();
