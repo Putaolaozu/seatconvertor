@@ -665,6 +665,10 @@ body.dragging-arrangement, body.dragging-arrangement * {
   .page.wide-layout .grid-wrap {
     width: max-content;
     max-width: 100%;
+    padding-top: 44px;
+    padding-bottom: 44px;
+    padding-left: 96px;
+    padding-right: 96px;
     overflow-x: auto;
   }
 }
