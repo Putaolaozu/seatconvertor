@@ -23,6 +23,7 @@
   let aisleGaps = createDefaultAisleGaps(cols);
   let leftExtraSeats = [];
   let rightExtraSeats = [];
+  let doors = { 'front-left': false, 'front-right': false, 'back-left': false, 'back-right': false };
   let unassigned = [], arrangeDrag = null, toastTimer = null;
   let pointerDown = null, dragSelecting = false, selectionRange = null;
   let lastFocusedCell = { r: 0, c: 0 };
@@ -85,10 +86,10 @@
   }
 
   function saveState() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ rows, cols, seats, aisleGaps, leftExtraSeats, rightExtraSeats, studentView, unassigned })); } catch (_) {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ rows, cols, seats, aisleGaps, leftExtraSeats, rightExtraSeats, doors, studentView, unassigned })); } catch (_) {}
   }
 
-  const getSnapshot = () => ({ rows, cols, seats: seats.map(r => [...r]), aisleGaps: [...aisleGaps], leftExtraSeats: [...leftExtraSeats], rightExtraSeats: [...rightExtraSeats], studentView, unassigned: [...unassigned], lastFocusedCell: { ...lastFocusedCell } });
+  const getSnapshot = () => ({ rows, cols, seats: seats.map(r => [...r]), aisleGaps: [...aisleGaps], leftExtraSeats: [...leftExtraSeats], rightExtraSeats: [...rightExtraSeats], doors: { ...doors }, studentView, unassigned: [...unassigned], lastFocusedCell: { ...lastFocusedCell } });
   function updateUndoButton() {
     undoBtn.disabled = undoHistory.length === 0;
     undoBtn.title = undoBtn.disabled ? '暂无可撤销的操作' : '撤销（Ctrl+Z）';
@@ -106,6 +107,7 @@
     if (undoHistory.length === 0) return showToast('没有可撤销的操作');
     const s = undoHistory.pop();
     [rows, cols, studentView, seats, leftExtraSeats, rightExtraSeats, unassigned] = [s.rows, s.cols, s.studentView, s.seats.map(r => [...r]), [...(s.leftExtraSeats || [])], [...(s.rightExtraSeats || [])], [...s.unassigned]];
+    doors = { 'front-left': false, 'front-right': false, 'back-left': false, 'back-right': false, ...(s.doors || {}) };
     aisleGaps = normalizeAisleGaps(s.aisleGaps, cols);
     lastFocusedCell = { r: Math.max(0, Math.min(rows - 1, s.lastFocusedCell?.r ?? 0)), c: Math.max(0, Math.min(cols - 1, s.lastFocusedCell?.c ?? 0)) };
     selectionRange = pointerDown = dragSelecting = arrangeDrag = null;
@@ -128,6 +130,7 @@
       unassigned = Array.isArray(saved.unassigned) ? saved.unassigned.map(cleanText).filter(Boolean) : [];
       leftExtraSeats = Array.isArray(saved.leftExtraSeats) ? saved.leftExtraSeats.map(cleanText) : [];
       rightExtraSeats = Array.isArray(saved.rightExtraSeats) ? saved.rightExtraSeats.map(cleanText) : [];
+      if (saved.doors && typeof saved.doors === 'object') doors = { ...doors, ...saved.doors };
     } catch (_) {}
   }
 
@@ -172,6 +175,13 @@
     arrangeBtn.setAttribute('aria-pressed', arrangeMode);
     arrangeBtn.classList.toggle('primary', arrangeMode);
     document.body.classList.toggle('arranging-seats', arrangeMode);
+    board.classList.toggle('student-view', studentView);
+    board.querySelectorAll('.classroom-door').forEach(btn => {
+      const active = Boolean(doors[btn.dataset.door]);
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', String(active));
+      btn.title = active ? '取消教室门' : '点击添加教室门';
+    });
     topStageArea.hidden = !studentView;
     bottomStageArea.hidden = studentView;
     seatCount.textContent = `${rows} 行 × ${cols} 列 · 共 ${rows * cols} 座位`;
@@ -650,6 +660,15 @@
   }
 
   board.addEventListener('click', e => {
+    const doorBtn = e.target.closest('.classroom-door');
+    if (doorBtn) {
+      const key = doorBtn.dataset.door;
+      recordUndo();
+      doors[key] = !doors[key];
+      render();
+      showToast(doors[key] ? `已添加${key.startsWith('front') ? '前门' : '后门'}` : '已取消教室门');
+      return;
+    }
     const addButton = e.target.closest('.stage-add-btn');
     if (addButton) {
       addExtraSeat(addButton.dataset.side);

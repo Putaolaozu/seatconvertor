@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>班级座位表编辑神器</title>
-<link rel="stylesheet" href="style.css?v=20261118">
+<link rel="stylesheet" href="style.css?v=20261124">
 <link rel="icon" href="favicon.jpg" type="image/jpeg">
 </head>
 <body>
@@ -36,14 +36,16 @@
   </div>
   
   <div class="tips">
-    <h2>鼠标拖动多选，可批量复制粘贴；</h2>
-    <h2>点击“调整座位”后，拖动姓名可以互换座位，点“ — ”可以暂存姓名。</h2>
-    <h2>点击列间的小图标，可增加或取消过道。</h2>
+    <h2>鼠标拖动多选，可批量复制粘贴；点击“调整座位”后，拖动姓名可以互换座位，点“ — ”可以暂存姓名。</h2>
   </div>
   <div class="statusline">
     <div class="view-state"><span class="state-dot"></span><span id="viewTitle">教师视角</span></div>
   </div>
   <section class="board">
+    <button type="button" class="classroom-door" data-door="front-left" aria-pressed="false" title="点击添加教室门"></button>
+    <button type="button" class="classroom-door" data-door="front-right" aria-pressed="false" title="点击添加教室门"></button>
+    <button type="button" class="classroom-door" data-door="back-left" aria-pressed="false" title="点击添加教室门"></button>
+    <button type="button" class="classroom-door" data-door="back-right" aria-pressed="false" title="点击添加教室门"></button>
     <div class="stage-area" id="topStageArea">
       <div class="stage">
         <button class="stage-add-btn" data-side="left" title="在此添加座位" type="button">+</button>
@@ -136,6 +138,6 @@
   <div class="menu-item" id="menuPaste">粘贴</div>
 </div>
 
-<script src="script.js?v=20261118"></script>
+<script src="script.js?v=20261124"></script>
 </body>
 </html>

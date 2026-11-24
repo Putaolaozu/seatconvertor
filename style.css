@@ -87,7 +87,7 @@ h2 {font-size: medium;}
 .tips { color: var(--muted); margin-left: 10px; }
 .tip-right {text-align: right;margin-right: 10px; color: var(--muted);}
 
-.board { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.board { position: relative; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
 
 .stage-area {
   width: 100%;
@@ -260,7 +260,7 @@ td:not(.aisle-col) {
 .seat.has-text { font-weight: 600; }
 .seat.range-selected { background: #eaf1ec; border-color: var(--focus); box-shadow: inset 0 0 0 1px var(--focus); }
 
-.table-footer { border-top: 1px solid var(--line); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 14px; }
+.table-footer { border-top: 1px solid var(--line); padding: 14px 20px; min-height: 60px; display: flex; justify-content: center; align-items: center; color: var(--muted); font-size: 14px; }
 
 /* ==========================================
    4. 调整模式 (拖拽与抖动效果)
@@ -432,7 +432,7 @@ body.dragging-arrangement, body.dragging-arrangement * {
 
   .grid-wrap {
     overflow: visible !important;
-    padding: 0 !important;
+    padding: 36px 95px !important;
     width: 100% !important;
     text-align: center !important;
   }
@@ -672,5 +672,98 @@ body.dragging-arrangement, body.dragging-arrangement * {
 @media screen and (max-width: 700px) {
   .page.wide-layout {
     max-width: calc(100vw - 24px);
+  }
+}
+
+/* ==========================================
+   13. 教室前后门按钮与样式（纯 CSS 驱动视角定位）
+   ========================================== */
+/* 默认未开启状态：低调的门形 SVG 按钮 */
+.classroom-door {
+  position: absolute;
+  z-index: 8;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px dashed transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #b8bcb2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.16s ease;
+}
+
+.classroom-door::before {
+  content: "";
+  width: 22px;
+  height: 22px;
+  background-color: currentColor;
+  -webkit-mask: url("icons/door.svg") no-repeat center / contain;
+  mask: url("icons/door.svg") no-repeat center / contain;
+}
+
+.classroom-door:hover {
+  color: var(--accent-hover);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* 教师视角（默认，讲台在底部）：前门在下方，后门在上方 */
+.board:not(.student-view) .classroom-door[data-door="front-left"]  { bottom: 10px; left: 20px; }
+.board:not(.student-view) .classroom-door[data-door="front-right"] { bottom: 10px; right: 20px; }
+.board:not(.student-view) .classroom-door[data-door="back-left"]   { top: 14px; left: 20px; }
+.board:not(.student-view) .classroom-door[data-door="back-right"]  { top: 14px; right: 20px; }
+
+/* 学生视角（旋转 180°，讲台在顶部）：四角中心对称对调，前门在上方，后门在下方 */
+.board.student-view .classroom-door[data-door="front-left"]  { top: 14px; right: 20px; }
+.board.student-view .classroom-door[data-door="front-right"] { top: 14px; left: 20px; }
+.board.student-view .classroom-door[data-door="back-left"]   { bottom: 10px; right: 20px; }
+.board.student-view .classroom-door[data-door="back-right"]  { bottom: 10px; left: 20px; }
+
+/* 开启状态：变成前后门，字体大小/粗细/字间距/颜色与“讲 台”一致 */
+.classroom-door.is-active {
+  width: auto;
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+}
+
+.classroom-door.is-active::before {
+  display: none;
+}
+
+.classroom-door.is-active[data-door^="front"]::after {
+  content: "前门";
+}
+
+.classroom-door.is-active[data-door^="back"]::after {
+  content: "后门";
+}
+
+/* 鼠标移到已添加的前后门上，提示可点击恢复回按钮 */
+.classroom-door.is-active:hover {
+  border-color: #e34b4b;
+  background: #fdf2f2;
+  color: #c92f2f;
+}
+
+/* 打印时隐藏未开启的门按钮，保留已开启的前后门 */
+@media print {
+  .classroom-door:not(.is-active) {
+    display: none !important;
+  }
+  .classroom-door.is-active {
+    border-color: #999 !important;
+    background: #fff !important;
+    color: #333 !important;
   }
 }
